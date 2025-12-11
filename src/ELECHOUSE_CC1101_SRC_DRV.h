@@ -18,6 +18,10 @@
 
 #include <Arduino.h>
 
+#if defined(ARDUINO_M5STACK_CORE2) || defined(ARDUINO_M5STACK_CORES3)
+#include <M5Unified.h>
+#endif  
+
 //***************************************CC1101 define**************************************************//
 // CC1101 CONFIG REGSITER
 #define CC1101_IOCFG2       0x00        // GDO2 output pin configuration
@@ -190,5 +194,8 @@ bool CheckRxFifo(int t);
 };
 
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
+extern uint32_t GDO0_risingCtr;
+extern uint32_t GDO0_fallingCtr;
+
 
 #endif

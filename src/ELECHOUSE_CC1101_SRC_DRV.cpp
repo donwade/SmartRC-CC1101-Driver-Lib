@@ -135,11 +135,20 @@ void ELECHOUSE_CC1101::GDO_Set(void)
 * INPUT        : none
 * OUTPUT       : none
 ****************************************************************/
+uint32_t GDO0_risingCtr;
+uint32_t GDO0_fallingCtr;
+
+void IRAM_ATTR GDO0_ISR()
+{
+	 digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr; 
+}
+
 void ELECHOUSE_CC1101::GDO0_Set(void)
 {
     pinMode(GDO0, INPUT);
     Serial.printf("\n%s: GDO0 %d set to INPUT\n\n", __FUNCTION__, GDO0);
     delay(3000);
+    attachInterrupt(GDO0, GDO0_ISR, CHANGE);
 }
 
 
@@ -175,11 +184,12 @@ void ELECHOUSE_CC1101::Reset(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::Init(void)
 {
+	M5.begin();
     setSpi();
     SpiStart();                 //spi initialization
-    digitalWrite(SS_PIN, HIGH);
-    digitalWrite(SCK_PIN, HIGH);
-    digitalWrite(MOSI_PIN, LOW);
+    ////digitalWrite(SS_PIN, HIGH);
+    ////digitalWrite(SCK_PIN, HIGH);
+    ////digitalWrite(MOSI_PIN, LOW);
     Reset();                    //CC1101 reset
     RegConfigSettings();        //CC1101 register config
     SpiEnd();
