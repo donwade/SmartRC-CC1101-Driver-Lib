@@ -137,10 +137,20 @@ void ELECHOUSE_CC1101::GDO_Set(void)
 ****************************************************************/
 uint32_t GDO0_risingCtr;
 uint32_t GDO0_fallingCtr;
+uint32_t GDO0_timeout;
+uint32_t GDO0_sempass;
+
+SemaphoreHandle_t xSemaphore = NULL;
 
 void IRAM_ATTR GDO0_ISR()
 {
-	 digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr++; 
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr++;
+	
+	xSemaphoreGiveFromISR( xSemaphore, &xHigherPriorityTaskWoken );
+
+	// wake up task that need it.
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
 void ELECHOUSE_CC1101::GDO0_Set(void)
@@ -149,6 +159,7 @@ void ELECHOUSE_CC1101::GDO0_Set(void)
     Serial.printf("\n%s: GDO0 %d set to INPUT\n\n", __FUNCTION__, GDO0);
     delay(3000);
     attachInterrupt(GDO0, GDO0_ISR, CHANGE);
+    xSemaphore = xSemaphoreCreateBinary();
 }
 
 
@@ -1707,11 +1718,17 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);                              //start send
 
+#if 0
+	// poll for ri
 	ctr = 1000;
     while (ctr-- && !digitalRead(GDO0));                // Wait for GDO0 to be set -> sync transmitted
 
 	ctr = 1000;
     while (ctr-- && digitalRead(GDO0));                          // Wait for GDO0 to be cleared -> end of packet
+#else
+    int foo = xSemaphoreTake( xSemaphore, pdMS_TO_TICKS(5000) );
+	foo == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
+#endif
 
     SpiStrobe(CC1101_SFTX);                 //flush TXfifo
     trxstate = 1;

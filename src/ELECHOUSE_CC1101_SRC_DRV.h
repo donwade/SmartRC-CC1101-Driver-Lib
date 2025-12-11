@@ -196,6 +196,8 @@ bool CheckRxFifo(int t);
 extern ELECHOUSE_CC1101 ELECHOUSE_cc1101;
 extern uint32_t GDO0_risingCtr;
 extern uint32_t GDO0_fallingCtr;
+extern uint32_t GDO0_timeout;
+extern uint32_t GDO0_sempass;
 
 
 #endif
