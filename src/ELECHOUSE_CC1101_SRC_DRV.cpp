@@ -140,7 +140,7 @@ uint32_t GDO0_fallingCtr;
 
 void IRAM_ATTR GDO0_ISR()
 {
-	 digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr; 
+	 digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr++; 
 }
 
 void ELECHOUSE_CC1101::GDO0_Set(void)
