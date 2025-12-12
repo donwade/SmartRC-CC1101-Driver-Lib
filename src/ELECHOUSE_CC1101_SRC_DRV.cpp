@@ -195,7 +195,6 @@ void ELECHOUSE_CC1101::Reset(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::Init(void)
 {
-	M5.begin();
     setSpi();
     SpiStart();                 //spi initialization
     ////digitalWrite(SS_PIN, HIGH);
