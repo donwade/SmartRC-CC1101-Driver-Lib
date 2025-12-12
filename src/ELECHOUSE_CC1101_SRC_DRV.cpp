@@ -68,7 +68,7 @@ byte clb2[2] = { 31, 38 };
 byte clb3[2] = { 65, 76 };
 byte clb4[2] = { 77, 79 };
 
-SPIClass *vspi = NULL;
+SPIClass *mySPI = NULL;
 
 /****************************************************************/
 uint8_t PA_TABLE[8]     { 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -97,18 +97,13 @@ void ELECHOUSE_CC1101::setupSPIhw(void)
     digitalWrite(SCK_PIN, HIGH);
     digitalWrite(MOSI_PIN, LOW);
     
-    
-	vspi = new SPIClass(VSPI);
-	vspi->begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
 
-#if 0
-    // enable SPI
-#ifdef ESP32
-    SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+#if defined(ARDUINO_M5STACK_CORES3)
+	mySPI = new SPIClass(FSPI);
 #else
-    SPI.begin();
+	mySPI = new SPIClass(VSPI);
 #endif
-#endif
+	mySPI->begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
 
 }
 /****************************************************************
@@ -174,7 +169,7 @@ void ELECHOUSE_CC1101::Reset(void)
     delay(1);
     digitalWrite(SS_PIN, LOW);
 
-    vspi->transfer(CC1101_SRES);
+    mySPI->transfer(CC1101_SRES);
 
     digitalWrite(SS_PIN, HIGH);
 }
@@ -197,7 +192,7 @@ bool ELECHOUSE_CC1101::Init(void)
 	    {
 		    Reset();                    //CC1101 reset
 		    RegConfigSettings();        //CC1101 register config
-		    vspi->endTransaction();
+		    mySPI->endTransaction();
 		    return true;
 		}
 		else
@@ -224,11 +219,11 @@ void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 {
     digitalWrite(SS_PIN, LOW);
 
-    vspi->transfer(addr);
-    vspi->transfer(value);
+    mySPI->transfer(addr);
+    mySPI->transfer(value);
 
     digitalWrite(SS_PIN, HIGH);
-    vspi->endTransaction();
+    mySPI->endTransaction();
 }
 
 
@@ -245,13 +240,13 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | WRITE_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    vspi->transfer(temp);
+    mySPI->transfer(temp);
 
     for (i = 0; i < num; i++)
-        vspi->transfer(buffer[i]);
+        mySPI->transfer(buffer[i]);
 
     digitalWrite(SS_PIN, HIGH);
-    vspi->endTransaction();
+    mySPI->endTransaction();
 }
 
 
@@ -264,10 +259,10 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
 void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
 {
     digitalWrite(SS_PIN, LOW);
-	    vspi->transfer(strobe);
+	    mySPI->transfer(strobe);
     digitalWrite(SS_PIN, HIGH);
 
-    vspi->endTransaction();
+    mySPI->endTransaction();
 }
 
 
@@ -284,10 +279,10 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
     temp = addr | READ_SINGLE;
     digitalWrite(SS_PIN, LOW);
 
-    vspi->transfer(temp);
-    value = vspi->transfer(0);
+    mySPI->transfer(temp);
+    value = mySPI->transfer(0);
     digitalWrite(SS_PIN, HIGH);
-    vspi->endTransaction();
+    mySPI->endTransaction();
     return value;
 }
 
@@ -305,13 +300,13 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    vspi->transfer(temp);
+    mySPI->transfer(temp);
 
     for (i = 0; i < num; i++)
-        buffer[i] = vspi->transfer(0);
+        buffer[i] = mySPI->transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
-    vspi->endTransaction();
+    mySPI->endTransaction();
 }
 
 
@@ -328,10 +323,10 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    vspi->transfer(temp);
-    value = vspi->transfer(0);
+    mySPI->transfer(temp);
+    value = mySPI->transfer(0);
     digitalWrite(SS_PIN, HIGH);
-    vspi->endTransaction();
+    mySPI->endTransaction();
     return value;
 }
 
