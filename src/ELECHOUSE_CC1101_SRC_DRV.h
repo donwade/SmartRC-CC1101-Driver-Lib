@@ -118,12 +118,11 @@
 class ELECHOUSE_CC1101
 {
 private:
-void SpiStart(void);
+void setupSPIhw(void);
 void SpiEnd(void);
 void GDO_Set(void);
 void GDO0_Set(void);
 void Reset(void);
-void setSpi(void);
 void RegConfigSettings(void);
 void Calibrate(void);
 void Split_PKTCTRL0(void);
@@ -132,10 +131,9 @@ void Split_MDMCFG1(void);
 void Split_MDMCFG2(void);
 void Split_MDMCFG4(void);
 public:
-void Init(void);
+bool Init(void);
 byte SpiReadStatus(byte addr);
-void setSpiPin(byte sck, byte miso, byte mosi, byte ss);
-void addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte modul);
+void declareSpiPins(byte sck, byte miso, byte mosi, byte ss);
 void setGDO(byte gdo0, byte gdo2);
 void setGDO0(byte gdo0);
 void addGDO(byte gdo0, byte gdo2, byte modul);
@@ -172,7 +170,6 @@ void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
 void setClb(byte b, byte s, byte e);
-bool getCC1101(void);
 byte getMode(void);
 void setSyncWord(byte sh, byte sl);
 void setAddr(byte v);

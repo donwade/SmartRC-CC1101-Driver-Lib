@@ -42,7 +42,7 @@ byte SS_PIN_M[max_modul];
 byte GDO0_M[max_modul];
 byte GDO2_M[max_modul];
 byte gdo_set = 0;
-bool spi = 0;
+bool bSpiPinsDeclared = 0;
 bool ccmode = 0;
 float MHz = 433.92;
 byte m4RxBw = 0;
@@ -68,6 +68,8 @@ byte clb2[2] = { 31, 38 };
 byte clb3[2] = { 65, 76 };
 byte clb4[2] = { 77, 79 };
 
+SPIClass *vspi = NULL;
+
 /****************************************************************/
 uint8_t PA_TABLE[8]     { 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
 //                       -30  -20  -15  -10   0    5    7    10
@@ -83,7 +85,7 @@ uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3,
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SpiStart(void)
+void ELECHOUSE_CC1101::setupSPIhw(void)
 {
     // initialize the SPI pins
     pinMode(SCK_PIN, OUTPUT);
@@ -91,29 +93,24 @@ void ELECHOUSE_CC1101::SpiStart(void)
     pinMode(MISO_PIN, INPUT);
     pinMode(SS_PIN, OUTPUT);
 
+    digitalWrite(SS_PIN, HIGH);
+    digitalWrite(SCK_PIN, HIGH);
+    digitalWrite(MOSI_PIN, LOW);
+    
+    
+	vspi = new SPIClass(VSPI);
+	vspi->begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
+
+#if 0
     // enable SPI
 #ifdef ESP32
     SPI.begin(SCK_PIN, MISO_PIN, MOSI_PIN, SS_PIN);
 #else
     SPI.begin();
 #endif
+#endif
+
 }
-
-
-/****************************************************************
-* FUNCTION NAME:SpiEnd
-* FUNCTION     :spi communication disable
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::SpiEnd(void)
-{
-    // disable SPI
-    SPI.endTransaction();
-    SPI.end();
-}
-
-
 /****************************************************************
 * FUNCTION NAME: GDO_Set()
 * FUNCTION     : set GDO0,GDO2 pin for serial pinmode.
@@ -177,11 +174,7 @@ void ELECHOUSE_CC1101::Reset(void)
     delay(1);
     digitalWrite(SS_PIN, LOW);
 
-    ////while (digitalRead(MISO_PIN));
-
-    SPI.transfer(CC1101_SRES);
-
-    ////while (digitalRead(MISO_PIN));
+    vspi->transfer(CC1101_SRES);
 
     digitalWrite(SS_PIN, HIGH);
 }
@@ -193,16 +186,31 @@ void ELECHOUSE_CC1101::Reset(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::Init(void)
+bool ELECHOUSE_CC1101::Init(void)
 {
-    setSpi();
-    SpiStart();                 //spi initialization
-    ////digitalWrite(SS_PIN, HIGH);
-    ////digitalWrite(SCK_PIN, HIGH);
-    ////digitalWrite(MOSI_PIN, LOW);
-    Reset();                    //CC1101 reset
-    RegConfigSettings();        //CC1101 register config
-    SpiEnd();
+
+	if (bSpiPinsDeclared)
+	{
+		setupSPIhw();
+		
+	    if (SpiReadStatus(0x31) > 0)
+	    {
+		    Reset();                    //CC1101 reset
+		    RegConfigSettings();        //CC1101 register config
+		    vspi->endTransaction();
+		    return true;
+		}
+		else
+		{
+			Serial.printf("init failed\n");
+		}
+	}
+	else
+		Serial.printf("need to call setSPIhw first\n");
+
+	delay(2000);
+	return false;
+	
 }
 
 
@@ -214,15 +222,13 @@ void ELECHOUSE_CC1101::Init(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 {
-    SpiStart();
     digitalWrite(SS_PIN, LOW);
 
-    //while (digitalRead(MISO_PIN));
+    vspi->transfer(addr);
+    vspi->transfer(value);
 
-    SPI.transfer(addr);
-    SPI.transfer(value);
     digitalWrite(SS_PIN, HIGH);
-    SpiEnd();
+    vspi->endTransaction();
 }
 
 
@@ -236,19 +242,16 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
 {
     byte i, temp;
 
-    SpiStart();
     temp = addr | WRITE_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    ////while (digitalRead(MISO_PIN));
-
-    SPI.transfer(temp);
+    vspi->transfer(temp);
 
     for (i = 0; i < num; i++)
-        SPI.transfer(buffer[i]);
+        vspi->transfer(buffer[i]);
 
     digitalWrite(SS_PIN, HIGH);
-    SpiEnd();
+    vspi->endTransaction();
 }
 
 
@@ -260,14 +263,11 @@ void ELECHOUSE_CC1101::SpiWriteBurstReg(byte addr, byte *buffer, byte num)
 ****************************************************************/
 void ELECHOUSE_CC1101::SpiStrobe(byte strobe)
 {
-    SpiStart();
     digitalWrite(SS_PIN, LOW);
-
-    ////while (digitalRead(MISO_PIN));
-
-    SPI.transfer(strobe);
+	    vspi->transfer(strobe);
     digitalWrite(SS_PIN, HIGH);
-    SpiEnd();
+
+    vspi->endTransaction();
 }
 
 
@@ -281,16 +281,13 @@ byte ELECHOUSE_CC1101::SpiReadReg(byte addr)
 {
     byte temp, value;
 
-    SpiStart();
     temp = addr | READ_SINGLE;
     digitalWrite(SS_PIN, LOW);
 
-    ////while (digitalRead(MISO_PIN));
-
-    SPI.transfer(temp);
-    value = SPI.transfer(0);
+    vspi->transfer(temp);
+    value = vspi->transfer(0);
     digitalWrite(SS_PIN, HIGH);
-    SpiEnd();
+    vspi->endTransaction();
     return value;
 }
 
@@ -305,19 +302,16 @@ void ELECHOUSE_CC1101::SpiReadBurstReg(byte addr, byte *buffer, byte num)
 {
     byte i, temp;
 
-    SpiStart();
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    ////while (digitalRead(MISO_PIN));
-
-    SPI.transfer(temp);
+    vspi->transfer(temp);
 
     for (i = 0; i < num; i++)
-        buffer[i] = SPI.transfer(0);
+        buffer[i] = vspi->transfer(0);
 
     digitalWrite(SS_PIN, HIGH);
-    SpiEnd();
+    vspi->endTransaction();
 }
 
 
@@ -331,88 +325,32 @@ byte ELECHOUSE_CC1101::SpiReadStatus(byte addr)
 {
     byte value, temp;
 
-    SpiStart();
     temp = addr | READ_BURST;
     digitalWrite(SS_PIN, LOW);
 
-    ////while (digitalRead(MISO_PIN));
-
-    SPI.transfer(temp);
-    value = SPI.transfer(0);
+    vspi->transfer(temp);
+    value = vspi->transfer(0);
     digitalWrite(SS_PIN, HIGH);
-    SpiEnd();
+    vspi->endTransaction();
     return value;
 }
 
 
 /****************************************************************
-* FUNCTION NAME:SPI pin Settings
-* FUNCTION     :Set Spi pins
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::setSpi(void)
-{
-    if (spi == 0)
-    {
-#if defined __AVR_ATmega168__ || defined __AVR_ATmega328P__
-        SCK_PIN = 13; MISO_PIN = 12; MOSI_PIN = 11; SS_PIN = 10;
-#elif defined __AVR_ATmega1280__ || defined __AVR_ATmega2560__
-        SCK_PIN = 52; MISO_PIN = 50; MOSI_PIN = 51; SS_PIN = 53;
-#elif ESP8266
-        SCK_PIN = 14; MISO_PIN = 12; MOSI_PIN = 13; SS_PIN = 15;
-#elif ESP32
-        SCK_PIN = 18; MISO_PIN = 19; MOSI_PIN = 23; SS_PIN = 5;
-#else
-        SCK_PIN = 13; MISO_PIN = 12; MOSI_PIN = 11; SS_PIN = 10;
-#endif
-	    Serial.printf("%s : spi pins SET IN THIS FUNCTION\n", __FUNCTION__);
-    }
-    else
-    {
-    	Serial.printf("%s : spi pins set earlier\n", __FUNCTION__);
-    }
-}
-
-
-/****************************************************************
 * FUNCTION NAME:COSTUM SPI
 * FUNCTION     :set costum spi pins.
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setSpiPin(byte sck, byte miso, byte mosi, byte ss)
+void ELECHOUSE_CC1101::declareSpiPins(byte sck, byte miso, byte mosi, byte ss)
 {
-	if (spi)
-	{
-	    Serial.printf("%s : BAD spi pins SET earlier \n", __FUNCTION__);
-	}
-	else
-	{
-	    Serial.printf("%s : GOOD spi pins SET IN THIS FUNCTION\n", __FUNCTION__);
-		
-	    spi = 1;
-	    SCK_PIN = sck;
-	    MISO_PIN = miso;
-	    MOSI_PIN = mosi;
-	    SS_PIN = ss;
-    }	   
-}
-
-
-/****************************************************************
-* FUNCTION NAME:COSTUM SPI
-* FUNCTION     :set costum spi pins.
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::addSpiPin(byte sck, byte miso, byte mosi, byte ss, byte modul)
-{
-    spi = 1;
-    SCK_PIN_M[modul] = sck;
-    MISO_PIN_M[modul] = miso;
-    MOSI_PIN_M[modul] = mosi;
-    SS_PIN_M[modul] = ss;
+    Serial.printf("%s : pins SET IN THIS FUNCTION\n", __FUNCTION__);
+	
+    bSpiPinsDeclared = 1;
+    SCK_PIN = sck;
+    MISO_PIN = miso;
+    MOSI_PIN = mosi;
+    SS_PIN = ss;
 }
 
 
@@ -844,24 +782,6 @@ void ELECHOUSE_CC1101::setClb(byte b, byte s, byte e)
         clb4[1] = e;
     }
 }
-
-
-/****************************************************************
-* FUNCTION NAME:getCC1101
-* FUNCTION     :Test Spi connection and return 1 when true.
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-bool ELECHOUSE_CC1101::getCC1101(void)
-{
-    setSpi();
-
-    if (SpiReadStatus(0x31) > 0)
-        return 1;
-    else
-        return 0;
-}
-
 
 /****************************************************************
 * FUNCTION NAME:getMode
