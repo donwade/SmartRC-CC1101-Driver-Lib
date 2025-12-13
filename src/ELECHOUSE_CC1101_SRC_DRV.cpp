@@ -24,6 +24,8 @@
 #define   BYTES_IN_RXFIFO   0x7F            //byte number in RXfifo
 #define   max_modul 6
 
+
+
 byte modulation = 2;
 byte frend0;
 byte chan = 0;
@@ -43,7 +45,7 @@ byte GDO0_M[max_modul];
 byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
-bool ccmode = 0;
+eGDIO_MODES gdio_mode = LEGACY_0;
 float MHz = 903.210;
 byte m4RxBw = 0;
 byte m4DaRa;
@@ -436,25 +438,38 @@ void ELECHOUSE_CC1101::setModul(byte modul)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setCCMode(bool s)
+void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
 {
-    ccmode = s;
+    gdio_mode = select;
 
-    if (ccmode == 1)
+    if (gdio_mode == LEGACY_1)
     {
-        SpiWriteReg(CC1101_IOCFG2, 0x0B);
-        SpiWriteReg(CC1101_IOCFG0, 0x06);
-        SpiWriteReg(CC1101_PKTCTRL0, 0x05);
+    	//page 62
+    	Serial.printf("%s: GDO0=sync tx'd or rx'd   GDO2=mdm clock in/out\n", __FUNCTION__);
+        SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
+        SpiWriteReg(CC1101_IOCFG0, 0x06);  // GD00 sync word tx sent or rx rcvd
+
+		// page 74
+        SpiWriteReg(CC1101_PKTCTRL0, 0x05); // crc en, var pkt len, len inside packet
+        
         SpiWriteReg(CC1101_MDMCFG3, 0xF8);
         SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
     }
-    else
+    else if (gdio_mode == LEGACY_0)
     {
-        SpiWriteReg(CC1101_IOCFG2, 0x0D);
-        SpiWriteReg(CC1101_IOCFG0, 0x0D);
-        SpiWriteReg(CC1101_PKTCTRL0, 0x32);
+    	//page 62
+    	Serial.printf("%s: GDO0=mdm data in/out GDO2=mdm data in/out \n", __FUNCTION__);
+        SpiWriteReg(CC1101_IOCFG2, 0x0D);	// gd02 serial data out
+        SpiWriteReg(CC1101_IOCFG0, 0x0D);   // gd00 serial data out
+
+		// page 74
+        SpiWriteReg(CC1101_PKTCTRL0, 0x32); // crc dis, inf len, GDO0=mdm data
         SpiWriteReg(CC1101_MDMCFG3, 0x93);
         SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
+    }
+    else 
+    {
+    	assert(gdio_mode == !gdio_mode);
     }
 
     setModulation(modulation);
@@ -1437,7 +1452,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 {
     SpiWriteReg(CC1101_FSCTRL1, 0x06);
 
-    setCCMode(ccmode);
+    setCCMode(gdio_mode);
     setMHZ(MHz);
 
     SpiWriteReg(CC1101_MDMCFG1, 0x02);

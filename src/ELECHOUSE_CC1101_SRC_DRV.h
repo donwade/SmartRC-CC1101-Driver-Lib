@@ -22,6 +22,12 @@
 #include <M5Unified.h>
 #endif  
 
+typedef enum 
+{
+    LEGACY_0,
+    LEGACY_1
+}eGDIO_MODES;
+
 //***************************************CC1101 define**************************************************//
 // CC1101 CONFIG REGSITER
 #define CC1101_IOCFG2       0x00        // GDO2 output pin configuration
@@ -139,7 +145,7 @@ void setGDO0(byte gdo0);
 void addGDO(byte gdo0, byte gdo2, byte modul);
 void addGDO0(byte gdo0, byte modul);
 void setModul(byte modul);
-void setCCMode(bool s);
+void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
 void setPA(int p);
 void setMHZ(float mhz);
