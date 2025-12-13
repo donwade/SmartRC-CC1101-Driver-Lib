@@ -44,7 +44,7 @@ byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
 bool ccmode = 0;
-float MHz = 433.92;
+float MHz = 903.210;
 byte m4RxBw = 0;
 byte m4DaRa;
 byte m2DCOFF;
@@ -1445,7 +1445,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
     SpiWriteReg(CC1101_CHANNR, chan);
     SpiWriteReg(CC1101_DEVIATN, 0x47);
     SpiWriteReg(CC1101_FREND1, 0x56);
-    SpiWriteReg(CC1101_MCSM0, 0x18);
+    SpiWriteReg(CC1101_MCSM0, 0x18);   //
     SpiWriteReg(CC1101_FOCCFG, 0x16);
     SpiWriteReg(CC1101_BSCFG, 0x1C);
     SpiWriteReg(CC1101_AGCCTRL2, 0xC7);
