@@ -127,7 +127,6 @@ private:
 void setupSPIhw(void);
 void SpiEnd(void);
 void GDO_Set(void);
-void GDO0_Set(void);
 void Reset(void);
 void RegConfigSettings(void);
 void Calibrate(void);
@@ -140,11 +139,10 @@ public:
 bool Init(void);
 byte SpiReadStatus(byte addr);
 void declareSpiPins(byte sck, byte miso, byte mosi, byte ss);
-void setGDO(byte gdo0, byte gdo2);
-void setGDO0(byte gdo0);
-void addGDO(byte gdo0, byte gdo2, byte modul);
-void addGDO0(byte gdo0, byte modul);
-void setModul(byte modul);
+
+void setGDO0(int8_t gdPinNo);
+void setGDO2(int8_t gdPinNo);
+
 void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
 void setPA(int p);

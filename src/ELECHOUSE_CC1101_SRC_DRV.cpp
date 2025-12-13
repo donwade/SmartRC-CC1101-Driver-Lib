@@ -134,26 +134,35 @@ uint32_t GDO0_fallingCtr;
 uint32_t GDO0_timeout;
 uint32_t GDO0_sempass;
 
-SemaphoreHandle_t xSemaphore = NULL;
+SemaphoreHandle_t sem_GGO0 = NULL;
+
+uint32_t GDO2_risingCtr;
+uint32_t GDO2_fallingCtr;
+uint32_t GDO2_timeout;
+uint32_t GDO2_sempass;
+
+SemaphoreHandle_t sem_GGO2 = NULL;
 
 void IRAM_ATTR GDO0_ISR()
 {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
 	digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr++;
 	
-	xSemaphoreGiveFromISR( xSemaphore, &xHigherPriorityTaskWoken );
+	xSemaphoreGiveFromISR( sem_GGO0, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
-void ELECHOUSE_CC1101::GDO0_Set(void)
+void IRAM_ATTR GDO2_ISR()
 {
-    pinMode(GDO0, INPUT);
-    Serial.printf("\n%s: GDO0 %d set to INPUT\n\n", __FUNCTION__, GDO0);
-    delay(3000);
-    attachInterrupt(GDO0, GDO0_ISR, CHANGE);
-    xSemaphore = xSemaphoreCreateBinary();
+	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
+	digitalRead(GDO2) ? GDO2_risingCtr++ : GDO2_fallingCtr++;
+	
+	xSemaphoreGiveFromISR( sem_GGO2, &xHigherPriorityTaskWoken );
+
+	// wake up task that need it.
+	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
 
@@ -350,87 +359,62 @@ void ELECHOUSE_CC1101::declareSpiPins(byte sck, byte miso, byte mosi, byte ss)
     SS_PIN = ss;
 }
 
-
-/****************************************************************
-* FUNCTION NAME:GDO Pin settings
-* FUNCTION     :set GDO Pins
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::setGDO(byte gdo0, byte gdo2)
-{
-    GDO0 = gdo0;
-    GDO2 = gdo2;
-    GDO_Set();
-}
-
-
 /****************************************************************
 * FUNCTION NAME:GDO0 Pin setting
 * FUNCTION     :set GDO0 Pin
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setGDO0(byte gdo0)
+void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
 {
-    GDO0 = gdo0;
-    GDO0_Set();
-}
+	static bool bNeedInit = true;
+    GDO0 = gdPinNo;
+    
+    pinMode(GDO0, INPUT);
+    Serial.printf("\n%s: GDO0 %d set to INPUT\n\n", __FUNCTION__, GDO0);
+    delay(3000);
 
-
-/****************************************************************
-* FUNCTION NAME:GDO Pin settings
-* FUNCTION     :add GDO Pins
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::addGDO(byte gdo0, byte gdo2, byte modul)
-{
-    GDO0_M[modul] = gdo0;
-    GDO2_M[modul] = gdo2;
-    gdo_set = 2;
-    GDO_Set();
-}
-
-
-/****************************************************************
-* FUNCTION NAME:add GDO0 Pin
-* FUNCTION     :add GDO0 Pin
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::addGDO0(byte gdo0, byte modul)
-{
-    GDO0_M[modul] = gdo0;
-    gdo_set = 1;
-    GDO0_Set();
-}
-
-
-/****************************************************************
-* FUNCTION NAME:set Modul
-* FUNCTION     :change modul
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::setModul(byte modul)
-{
-    SCK_PIN = SCK_PIN_M[modul];
-    MISO_PIN = MISO_PIN_M[modul];
-    MOSI_PIN = MOSI_PIN_M[modul];
-    SS_PIN = SS_PIN_M[modul];
-
-    if (gdo_set == 1)
+    if (bNeedInit)
     {
-        GDO0 = GDO0_M[modul];
+    	attachInterrupt(GDO0, GDO0_ISR, CHANGE);
+    	sem_GGO0 = xSemaphoreCreateBinary();
+    	bNeedInit = false;
     }
-    else if (gdo_set == 2)
+
+    if (gdPinNo < 0 )
     {
-        GDO0 = GDO0_M[modul];
-        GDO2 = GDO2_M[modul];
+    	digitalPinToInterrupt(-GDO0);
     }
 }
 
+
+/****************************************************************
+* FUNCTION NAME:GDO0 Pin setting
+* FUNCTION     :set GDO2 Pin
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+void ELECHOUSE_CC1101::setGDO2(int8_t gdPinNo)
+{
+	static bool bNeedInit = true;
+    GDO2 = gdPinNo;
+    
+    pinMode(GDO2, INPUT);
+    Serial.printf("\n%s: GDO2 %d set to INPUT\n\n", __FUNCTION__, GDO2);
+    delay(3000);
+
+    if (bNeedInit)
+    {
+    	attachInterrupt(GDO2, GDO2_ISR, CHANGE);
+    	sem_GGO0 = xSemaphoreCreateBinary();
+    	bNeedInit = false;
+    }
+
+    if (gdPinNo < 0 )
+    {
+    	digitalPinToInterrupt(-GDO2);
+    }
+}
 
 /****************************************************************
 * FUNCTION NAME:CCMode
@@ -445,12 +429,14 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
     if (gdio_mode == LEGACY_1)
     {
     	//page 62
-    	Serial.printf("%s: GDO0=sync tx'd or rx'd   GDO2=mdm clock in/out\n", __FUNCTION__);
+    	Serial.printf("%s: GDO0=det-sync tx or rx   GDO2=mdm clock in/out\n", __FUNCTION__);
         SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
         SpiWriteReg(CC1101_IOCFG0, 0x06);  // GD00 sync word tx sent or rx rcvd
 
 		// page 74
-        SpiWriteReg(CC1101_PKTCTRL0, 0x05); // crc en, var pkt len, len inside packet
+		
+    	Serial.printf("%s: CRC=ON pktLen=inPacket rx/tx-Fifos=ON\n" , __FUNCTION__);
+        SpiWriteReg(CC1101_PKTCTRL0, 0x05); 
         
         SpiWriteReg(CC1101_MDMCFG3, 0xF8);
         SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
@@ -463,7 +449,8 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
         SpiWriteReg(CC1101_IOCFG0, 0x0D);   // gd00 serial data out
 
 		// page 74
-        SpiWriteReg(CC1101_PKTCTRL0, 0x32); // crc dis, inf len, GDO0=mdm data
+    	Serial.printf("%s: CRC=OFF pktLen=notinPacket GDx=data+clk\n" , __FUNCTION__);
+        SpiWriteReg(CC1101_PKTCTRL0, 0x32); 
         SpiWriteReg(CC1101_MDMCFG3, 0x93);
         SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
     }
@@ -1655,7 +1642,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 	ctr = 1000;
     while (ctr-- && digitalRead(GDO0));                          // Wait for GDO0 to be cleared -> end of packet
 #else
-    int foo = xSemaphoreTake( xSemaphore, pdMS_TO_TICKS(5000) );
+    int foo = xSemaphoreTake( sem_GGO0, pdMS_TO_TICKS(5000) );
 	foo == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
 #endif
 
