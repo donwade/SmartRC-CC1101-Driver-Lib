@@ -1445,25 +1445,25 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
     SpiWriteReg(CC1101_MDMCFG1, 0x02);
     SpiWriteReg(CC1101_MDMCFG0, 0xF8);
     SpiWriteReg(CC1101_CHANNR, chan);
-    SpiWriteReg(CC1101_DEVIATN, 0x47);
+    SpiWriteReg(CC1101_DEVIATN, 0x47); 	// pg. 42 tweak freq dev fsk/c4.
     SpiWriteReg(CC1101_FREND1, 0x56);
     SpiWriteReg(CC1101_MCSM0, 0x18);   //
-    SpiWriteReg(CC1101_FOCCFG, 0x16);
-    SpiWriteReg(CC1101_BSCFG, 0x1C);
-    SpiWriteReg(CC1101_AGCCTRL2, 0xC7);
-    SpiWriteReg(CC1101_AGCCTRL1, 0x00);
-    SpiWriteReg(CC1101_AGCCTRL0, 0xB2);
-    SpiWriteReg(CC1101_FSCAL3, 0xE9);
-    SpiWriteReg(CC1101_FSCAL2, 0x2A);
-    SpiWriteReg(CC1101_FSCAL1, 0x00);
-    SpiWriteReg(CC1101_FSCAL0, 0x1F);
-    SpiWriteReg(CC1101_FSTEST, 0x59);
-    SpiWriteReg(CC1101_TEST2, 0x81);
-    SpiWriteReg(CC1101_TEST1, 0x35);
-    SpiWriteReg(CC1101_TEST0, 0x09);
-    SpiWriteReg(CC1101_PKTCTRL1, 0x04);
-    SpiWriteReg(CC1101_ADDR, 0x00);
-    SpiWriteReg(CC1101_PKTLEN, 0x00);
+    SpiWriteReg(CC1101_FOCCFG, 0x16); // fine freq compensation
+    SpiWriteReg(CC1101_BSCFG, 0x1C);	// clock recovery params on sync det	
+    SpiWriteReg(CC1101_AGCCTRL2, 0xC7);	// pg. 85 highest gain limit = 33db 
+    SpiWriteReg(CC1101_AGCCTRL1, 0x00); // pg. 86 carrier sense setting
+    SpiWriteReg(CC1101_AGCCTRL0, 0xB2); // pg. 87 agc settings ampl, ticks 
+    SpiWriteReg(CC1101_FSCAL3, 0xE9);	// pg. 89 freq call ops
+    SpiWriteReg(CC1101_FSCAL2, 0x2A);	// cal
+    SpiWriteReg(CC1101_FSCAL1, 0x00);	// cal
+    SpiWriteReg(CC1101_FSCAL0, 0x1F);	// cal
+    SpiWriteReg(CC1101_FSTEST, 0x59);	// factory always set to 0x59	
+    SpiWriteReg(CC1101_TEST2, 0x81);	// sleep control
+    SpiWriteReg(CC1101_TEST1, 0x35);	// wake up control
+    SpiWriteReg(CC1101_TEST0, 0x09);	// who knows.
+    SpiWriteReg(CC1101_PKTCTRL1, 0x04);	
+    SpiWriteReg(CC1101_ADDR, 0x00);		// device address
+    SpiWriteReg(CC1101_PKTLEN, 0x00);	// packet style, fixed, inpacket, infite
 }
 
 
