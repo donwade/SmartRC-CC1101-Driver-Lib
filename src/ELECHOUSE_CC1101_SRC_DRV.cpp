@@ -431,7 +431,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
     	//page 62
     	Serial.printf("%s: GDO0=det-sync tx or rx   GDO2=mdm clock in/out\n", __FUNCTION__);
         SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
-        SpiWriteReg(CC1101_IOCFG0, 0x06);  // GD00 sync word tx sent or rx rcvd
+        SpiWriteReg(CC1101_IOCFG0, 0x06);  // GD00 sync word detect rx or tx
 
 		// page 74
 		
