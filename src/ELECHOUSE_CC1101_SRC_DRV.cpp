@@ -65,12 +65,15 @@ byte pc0PktForm;
 byte pc0CRC_EN;
 byte pc0LenConf;
 byte trxstate = 0;
-byte clb1[2] = { 24, 28 };
-byte clb2[2] = { 31, 38 };
-byte clb3[2] = { 65, 76 };
-byte clb4[2] = { 77, 79 };
+byte cal300_348Mhz[2] = { 24, 28 };
+byte cal378_464Mhz[2] = { 31, 38 };
+byte cal779_899Mhz[2] = { 65, 76 };
+byte cal900_928Mhz[2] = { 77, 79 };
 
 SPIClass *mySPI = NULL;
+
+static const double XTAL=26.0;
+#define SAFETY_TIMER 10000  // how long to wait for tx done.
 
 /****************************************************************/
 uint8_t PA_TABLE[8]     { 0x00, 0xC0, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00 };
@@ -376,14 +379,15 @@ void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
 
     if (bNeedInit)
     {
-    	attachInterrupt(GDO0, GDO0_ISR, CHANGE);
     	sem_GGO0 = xSemaphoreCreateBinary();
+    	attachInterrupt(GDO0, GDO0_ISR, FALLING);
     	bNeedInit = false;
     }
 
     if (gdPinNo < 0 )
     {
     	digitalPinToInterrupt(-GDO0);
+    	bNeedInit = true;
     }
 }
 
@@ -405,8 +409,8 @@ void ELECHOUSE_CC1101::setGDO2(int8_t gdPinNo)
 
     if (bNeedInit)
     {
-    	attachInterrupt(GDO2, GDO2_ISR, CHANGE);
-    	sem_GGO0 = xSemaphoreCreateBinary();
+    	attachInterrupt(GDO2, GDO2_ISR, FALLING);
+    	sem_GGO2 = xSemaphoreCreateBinary();
     	bNeedInit = false;
     }
 
@@ -450,9 +454,25 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
 
 		// page 74
     	Serial.printf("%s: CRC=OFF pktLen=notinPacket GDx=data+clk\n" , __FUNCTION__);
-        SpiWriteReg(CC1101_PKTCTRL0, 0x32); 
+        SpiWriteReg(CC1101_PKTCTRL0, 0x32);
+        
         SpiWriteReg(CC1101_MDMCFG3, 0x93);
         SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
+    }
+    else if (gdio_mode == DONS_MODE)
+    {
+    	//page 62
+    	Serial.printf("%s: DON GDO0=fifo thresh  GDO2=mdm clock in/out\n", __FUNCTION__);
+        SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
+        SpiWriteReg(CC1101_IOCFG0, 0x02);  // GD00 signal on tx getting low?
+
+		// page 74
+		
+    	Serial.printf("%s: DON CRC=ON pktLen=inPacket rx/tx-Fifos=ON\n" , __FUNCTION__);
+        SpiWriteReg(CC1101_PKTCTRL0, 0x05); 
+        
+        SpiWriteReg(CC1101_MDMCFG3, 0xF8);
+        SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
     }
     else 
     {
@@ -624,6 +644,8 @@ void ELECHOUSE_CC1101::setPA(int p)
 ****************************************************************/
 void ELECHOUSE_CC1101::setMHZ(float mhz)
 {
+	//pg. 75
+	unsigned long test;
     byte freq2 = 0;
     byte freq1 = 0;
     byte freq0 = 0;
@@ -661,8 +683,23 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     SpiWriteReg(CC1101_FREQ2, freq2);
     SpiWriteReg(CC1101_FREQ1, freq1);
     SpiWriteReg(CC1101_FREQ0, freq0);
+/*
+	test = freq2 << 16 | freq1 << 8 | freq0;
+	
+    Serial.printf("%s: freq =%f %X reg1=%X reg2=%08X reg3=%08X\n",
+    			__FUNCTION__, MHz, 
+    			test,
+				freq2,freq1,freq0);
+	double retest;
+	retest = (XTAL / (double)(1<<16)) * (double) test;
+	Serial.printf("%s retest = %f mhz \n", __FUNCTION__, (float) retest);
 
-    Calibrate();
+	double err = MHz - retest;
+
+	Serial.printf("%s error = %f\n", __FUNCTION__, err);
+*/
+
+    Calibrate(); //disabled in call, it makes things worse.
 }
 
 
@@ -674,10 +711,10 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 ****************************************************************/
 void ELECHOUSE_CC1101::Calibrate(void)
 {
-
+#if 0
     if (MHz >= 300 && MHz <= 348)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 300, 348, clb1[0], clb1[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 300, 348, cal300_348Mhz[0], cal300_348Mhz[1]));
 
         if (MHz < 322.88)
         {
@@ -697,7 +734,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     }
     else if (MHz >= 378 && MHz <= 464)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 378, 464, clb2[0], clb2[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 378, 464, cal378_464Mhz[0], cal378_464Mhz[1]));
 
         if (MHz < 430.5)
         {
@@ -717,7 +754,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     }
     else if (MHz >= 779 && MHz <= 899.99)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 779, 899, clb3[0], clb3[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 779, 899, cal779_899Mhz[0], cal779_899Mhz[1]));
 
         if (MHz < 861)
         {
@@ -737,7 +774,7 @@ void ELECHOUSE_CC1101::Calibrate(void)
     }
     else if (MHz >= 900 && MHz <= 928)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 900, 928, clb4[0], clb4[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 900, 928, cal900_928Mhz[0], cal900_928Mhz[1]));
         SpiWriteReg(CC1101_TEST0, 0x09);
         int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
 
@@ -747,6 +784,9 @@ void ELECHOUSE_CC1101::Calibrate(void)
         if (last_pa != 4)
             setPA(pa);
     }
+#else
+	Serial.printf("%s: function disbled due to bad calc\n", __FUNCTION__);
+#endif
 }
 
 
@@ -760,23 +800,23 @@ void ELECHOUSE_CC1101::setClb(byte b, byte s, byte e)
 {
     if (b == 1)
     {
-        clb1[0] = s;
-        clb1[1] = e;
+        cal300_348Mhz[0] = s;
+        cal300_348Mhz[1] = e;
     }
     else if (b == 2)
     {
-        clb2[0] = s;
-        clb2[1] = e;
+        cal378_464Mhz[0] = s;
+        cal378_464Mhz[1] = e;
     }
     else if (b == 3)
     {
-        clb3[0] = s;
-        clb3[1] = e;
+        cal779_899Mhz[0] = s;
+        cal779_899Mhz[1] = e;
     }
     else if (b == 4)
     {
-        clb4[0] = s;
-        clb4[1] = e;
+        cal900_928Mhz[0] = s;
+        cal900_928Mhz[1] = e;
     }
 }
 
@@ -974,6 +1014,52 @@ void ELECHOUSE_CC1101::setLengthConfig(byte v)
 void ELECHOUSE_CC1101::setPacketLength(byte v)
 {
     SpiWriteReg(CC1101_PKTLEN, v);
+}
+
+/****************************************************************
+* FUNCTION NAME:Set fifo trigger level
+* FUNCTION     :bytes before tx underflow or rx overflow 
+* INPUT        :none
+* OUTPUT       :none
+		  TX   RX
+0 (0000)  61    4
+1 (0001)  57    8
+2 (0010)  53   12
+3 (0011)  49   16
+4 (0100)  45   20
+5 (0101)  41   24
+6 (0110)  37   28
+8 (1000)  29   36
+9 (1001)  25   40
+10 (1010) 21   44
+11 (1011) 17   48
+12 (1100) 13   52
+13 (1101) 9    56
+14 (1110) 5    60
+15 (1111) 1    64
+*/
+const uint8_t tx_lvl[] = {61,57,53,49,45,41,37,33,29,25,21,17,13, 9, 5, 1};
+
+const uint8_t rx_lvl[] = { 4, 8,12,16,20,24,28,32,36,40,44,48,52,56,60,64};
+
+
+/****************************************************************/
+void ELECHOUSE_CC1101::setTxFifoThreshold(uint8_t v)
+{
+	int i;
+	int test;
+	for (i = 0; i < sizeof(tx_lvl); i++) 
+	{
+		test = v - tx_lvl[i];
+		//Serial.printf("%d  %d > %d x %d\n", i, v, tx_lvl[i], test);
+		if ( v > tx_lvl[i] ) break;
+	}
+	i = i - 1;
+	
+	Serial.printf("%s : tx fifo warn wants %d gets %d {%d}\n", __FUNCTION__, v, tx_lvl[i], i);
+	delay(1000);
+    SpiWriteReg(CC1101_FIFOTHR, i);
+    SpiWriteReg(CC1101_IOCFG0, 2);  // GD00 signal on tx low
 }
 
 
@@ -1466,7 +1552,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
     SpiWriteReg(CC1101_PKTLEN, 0x00);	// packet style, fixed, inpacket, infite
 }
 
-
+#define NOTE(x) Serial.println(x);
 /****************************************************************
 * FUNCTION NAME:SetTx
 * FUNCTION     :set CC1101 send data
@@ -1475,6 +1561,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetTx(void)
 {
+	NOTE("on");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
     trxstate = 1;
@@ -1489,6 +1576,7 @@ void ELECHOUSE_CC1101::SetTx(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetRx(void)
 {
+	NOTE("on");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
     trxstate = 2;
@@ -1503,6 +1591,8 @@ void ELECHOUSE_CC1101::SetRx(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetTx(float mhz)
 {
+	NOTE("hop and send");
+	
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_STX);      //start send
@@ -1518,6 +1608,7 @@ void ELECHOUSE_CC1101::SetTx(float mhz)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetRx(float mhz)
 {
+	NOTE("hop and RX");
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_SRX);      //start receive
@@ -1618,6 +1709,20 @@ void ELECHOUSE_CC1101::SendData(char *txchar)
     SendData(chartobyte, len);
 }
 
+#include <string>
+#include <cstring> 
+
+
+void ELECHOUSE_CC1101::SendData(String &txchar)
+{
+    int len = txchar.length();
+    char chartobyte[len+1];
+
+	strcpy (chartobyte, txchar.c_str());
+
+    SendData((byte*)chartobyte, len);
+}
+
 
 /****************************************************************
 * FUNCTION NAME:SendData
@@ -1628,25 +1733,37 @@ void ELECHOUSE_CC1101::SendData(char *txchar)
 void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 {
 	uint32_t ctr;
+	uint8_t count;
 	
     SpiWriteReg(CC1101_TXFIFO, size);
     SpiWriteBurstReg(CC1101_TXFIFO, txBuffer, size);    //write data to send
+    
     SpiStrobe(CC1101_SIDLE);
+	uint32_t then = millis();
     SpiStrobe(CC1101_STX);                              //start send
 
-#if 0
-	// poll for ri
-	ctr = 1000;
-    while (ctr-- && !digitalRead(GDO0));                // Wait for GDO0 to be set -> sync transmitted
+    int ret = xSemaphoreTake( sem_GGO0, pdMS_TO_TICKS(SAFETY_TIMER) );
+	ret == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
+	
+	if (ret != pdTRUE) 
+	{	
+		Serial.printf("%s timeout on send! ret=%d \n", __FUNCTION__, ret);
+	}
+	else
+	{
+		// GOOD tx. last 4 bytes to go as GDO0 is set to alert on byte 4.
+		// docs recommend wait until last byte is out.
+		while(true)
+		{
+			count = SpiReadStatus(CC1101_TXBYTES);
+			if (!count) break;
+			delay(1);
+		}
+		//Serial.printf("bytes left in Q = %d\n", count);
+	}
 
-	ctr = 1000;
-    while (ctr-- && digitalRead(GDO0));                          // Wait for GDO0 to be cleared -> end of packet
-#else
-    int foo = xSemaphoreTake( sem_GGO0, pdMS_TO_TICKS(5000) );
-	foo == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
-#endif
+    SpiStrobe(CC1101_SFTX); //should be zero but anyhow ... flush TXfifo
 
-    SpiStrobe(CC1101_SFTX);                 //flush TXfifo
     trxstate = 1;
 }
 

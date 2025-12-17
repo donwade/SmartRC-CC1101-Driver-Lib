@@ -25,7 +25,8 @@
 typedef enum 
 {
     LEGACY_0,
-    LEGACY_1
+    LEGACY_1,
+    DONS_MODE
 }eGDIO_MODES;
 
 //***************************************CC1101 define**************************************************//
@@ -142,6 +143,7 @@ void declareSpiPins(byte sck, byte miso, byte mosi, byte ss);
 
 void setGDO0(int8_t gdPinNo);
 void setGDO2(int8_t gdPinNo);
+void setTxFifoThreshold(uint8_t v);
 
 void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
@@ -165,6 +167,8 @@ void SendData(byte *txBuffer, byte size);
 void SendData(char *txchar);
 void SendData(byte *txBuffer, byte size, int t);
 void SendData(char *txchar, int t);
+void SendData(String &txchar);
+
 byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
