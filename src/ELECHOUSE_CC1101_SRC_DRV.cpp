@@ -137,21 +137,25 @@ uint32_t GDO0_fallingCtr;
 uint32_t GDO0_timeout;
 uint32_t GDO0_sempass;
 
-SemaphoreHandle_t sem_GGO0 = NULL;
+SemaphoreHandle_t sem_GGO0_UP = NULL;
+SemaphoreHandle_t sem_GGO0_DN = NULL;
 
 uint32_t GDO2_risingCtr;
 uint32_t GDO2_fallingCtr;
 uint32_t GDO2_timeout;
 uint32_t GDO2_sempass;
 
-SemaphoreHandle_t sem_GGO2 = NULL;
+SemaphoreHandle_t sem_GGO2_UP = NULL;
+SemaphoreHandle_t sem_GGO2_DN = NULL;
 
 void IRAM_ATTR GDO0_ISR()
 {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	digitalRead(GDO0) ? GDO0_risingCtr++ : GDO0_fallingCtr++;
+	uint8_t pin = digitalRead(GDO0);
 	
-	xSemaphoreGiveFromISR( sem_GGO0, &xHigherPriorityTaskWoken );
+	pin ? GDO0_risingCtr++ : GDO0_fallingCtr++;
+	
+	xSemaphoreGiveFromISR( pin ? sem_GGO0_UP: sem_GGO0_DN, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
@@ -160,9 +164,11 @@ void IRAM_ATTR GDO0_ISR()
 void IRAM_ATTR GDO2_ISR()
 {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
-	digitalRead(GDO2) ? GDO2_risingCtr++ : GDO2_fallingCtr++;
+	uint8_t pin = digitalRead(GDO2);
 	
-	xSemaphoreGiveFromISR( sem_GGO2, &xHigherPriorityTaskWoken );
+	pin ? GDO2_risingCtr++ : GDO2_fallingCtr++;
+	
+	xSemaphoreGiveFromISR( pin ? sem_GGO2_UP : sem_GGO2_DN, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
@@ -379,8 +385,9 @@ void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
 
     if (bNeedInit)
     {
-    	sem_GGO0 = xSemaphoreCreateBinary();
-    	attachInterrupt(GDO0, GDO0_ISR, FALLING);
+    	sem_GGO0_UP = xSemaphoreCreateBinary();
+    	sem_GGO0_DN = xSemaphoreCreateBinary();
+    	attachInterrupt(GDO0, GDO0_ISR, TRIG_BOTH); //FALLING
     	bNeedInit = false;
     }
 
@@ -409,8 +416,9 @@ void ELECHOUSE_CC1101::setGDO2(int8_t gdPinNo)
 
     if (bNeedInit)
     {
-    	attachInterrupt(GDO2, GDO2_ISR, FALLING);
-    	sem_GGO2 = xSemaphoreCreateBinary();
+    	attachInterrupt(GDO2, GDO2_ISR, TRIG_BOTH);
+    	sem_GGO2_UP = xSemaphoreCreateBinary();
+    	sem_GGO2_DN = xSemaphoreCreateBinary();
     	bNeedInit = false;
     }
 
@@ -650,6 +658,8 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     byte freq1 = 0;
     byte freq0 = 0;
 
+	Serial.printf("%s: setting freq to %f mHz\n",__FUNCTION__, mhz);
+	
     targetFreq = mhz;
 
     for (bool i = 0; i == 0;)
@@ -1742,7 +1752,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 	uint32_t then = millis();
     SpiStrobe(CC1101_STX);                              //start send
 
-    int ret = xSemaphoreTake( sem_GGO0, pdMS_TO_TICKS(SAFETY_TIMER) );
+    int ret = xSemaphoreTake( sem_GGO0_UP, pdMS_TO_TICKS(SAFETY_TIMER) );
 	ret == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
 	
 	if (ret != pdTRUE) 

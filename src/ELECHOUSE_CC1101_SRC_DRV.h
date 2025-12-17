@@ -29,6 +29,15 @@ typedef enum
     DONS_MODE
 }eGDIO_MODES;
 
+typedef enum {
+    TRIG_NONE = 0,
+    TRIG_RISING = 1,
+    TRIG_FALLING = 2,                                                             
+    TRIG_BOTH = 3,
+    TRIG_LOW = 4,
+    TRIG_HIGH = 5 
+} eIRQ_TRIGGER;
+
 //***************************************CC1101 define**************************************************//
 // CC1101 CONFIG REGSITER
 #define CC1101_IOCFG2       0x00        // GDO2 output pin configuration
