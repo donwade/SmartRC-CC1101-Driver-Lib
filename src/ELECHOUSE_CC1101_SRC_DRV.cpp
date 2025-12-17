@@ -46,7 +46,7 @@ byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
 eGDIO_MODES gdio_mode = LEGACY_0;
-float MHz = 903.210;
+float targetFreq = 903.210;
 byte m4RxBw = 0;
 byte m4DaRa;
 byte m2DCOFF;
@@ -528,7 +528,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
     pa = p;
 
-    if (MHz >= 300 && MHz <= 348)
+    if (targetFreq >= 300 && targetFreq <= 348)
     {
         if (pa <= -30)
             a = PA_TABLE_315[0];
@@ -549,7 +549,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 1;
     }
-    else if (MHz >= 378 && MHz <= 464)
+    else if (targetFreq >= 378 && targetFreq <= 464)
     {
         if (pa <= -30)
             a = PA_TABLE_433[0];
@@ -570,7 +570,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 2;
     }
-    else if (MHz >= 779 && MHz <= 899.99)
+    else if (targetFreq >= 779 && targetFreq <= 899.99)
     {
         if (pa <= -30)
             a = PA_TABLE_868[0];
@@ -595,7 +595,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 3;
     }
-    else if (MHz >= 900 && MHz <= 928)
+    else if (targetFreq >= 900 && targetFreq <= 928)
     {
         if (pa <= -30)
             a = PA_TABLE_915[0];
@@ -650,7 +650,7 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
     byte freq1 = 0;
     byte freq0 = 0;
 
-    MHz = mhz;
+    targetFreq = mhz;
 
     for (bool i = 0; i == 0;)
     {
@@ -687,14 +687,14 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 	test = freq2 << 16 | freq1 << 8 | freq0;
 	
     Serial.printf("%s: freq =%f %X reg1=%X reg2=%08X reg3=%08X\n",
-    			__FUNCTION__, MHz, 
+    			__FUNCTION__, targetFreq, 
     			test,
 				freq2,freq1,freq0);
 	double retest;
 	retest = (XTAL / (double)(1<<16)) * (double) test;
 	Serial.printf("%s retest = %f mhz \n", __FUNCTION__, (float) retest);
 
-	double err = MHz - retest;
+	double err = targetFreq - retest;
 
 	Serial.printf("%s error = %f\n", __FUNCTION__, err);
 */
@@ -712,11 +712,11 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 void ELECHOUSE_CC1101::Calibrate(void)
 {
 #if 0
-    if (MHz >= 300 && MHz <= 348)
+    if (targetFreq >= 300 && targetFreq <= 348)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 300, 348, cal300_348Mhz[0], cal300_348Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 300, 348, cal300_348Mhz[0], cal300_348Mhz[1]));
 
-        if (MHz < 322.88)
+        if (targetFreq < 322.88)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -732,11 +732,11 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (MHz >= 378 && MHz <= 464)
+    else if (targetFreq >= 378 && targetFreq <= 464)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 378, 464, cal378_464Mhz[0], cal378_464Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 378, 464, cal378_464Mhz[0], cal378_464Mhz[1]));
 
-        if (MHz < 430.5)
+        if (targetFreq < 430.5)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -752,11 +752,11 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (MHz >= 779 && MHz <= 899.99)
+    else if (targetFreq >= 779 && targetFreq <= 899.99)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 779, 899, cal779_899Mhz[0], cal779_899Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 779, 899, cal779_899Mhz[0], cal779_899Mhz[1]));
 
-        if (MHz < 861)
+        if (targetFreq < 861)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -772,9 +772,9 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (MHz >= 900 && MHz <= 928)
+    else if (targetFreq >= 900 && targetFreq <= 928)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(MHz, 900, 928, cal900_928Mhz[0], cal900_928Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 900, 928, cal900_928Mhz[0], cal900_928Mhz[1]));
         SpiWriteReg(CC1101_TEST0, 0x09);
         int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
 
@@ -1526,7 +1526,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
     SpiWriteReg(CC1101_FSCTRL1, 0x06);
 
     setCCMode(gdio_mode);
-    setMHZ(MHz);
+    setMHZ(targetFreq);
 
     SpiWriteReg(CC1101_MDMCFG1, 0x02);
     SpiWriteReg(CC1101_MDMCFG0, 0xF8);
