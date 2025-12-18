@@ -84,6 +84,32 @@ uint8_t PA_TABLE_433[8] { 0x12, 0x0E, 0x1D, 0x34, 0x60, 0x84, 0xC8, 0xC0, };    
 uint8_t PA_TABLE_868[10] { 0x03, 0x17, 0x1D, 0x26, 0x37, 0x50, 0x86, 0xCD, 0xC5, 0xC0, };   //779 - 899.99
 //                        -30  -20  -15  -10  -6    0    5    7    10   11
 uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3, 0xC0, };   //900 - 928
+
+
+
+uint8_t regMask( uint8_t &real, uint8_t val, uint8_t lhs, uint8_t rhs)
+{
+	uint8_t copy = real;
+	uint8_t wide = (lhs - rhs) + 1;
+	uint8_t mask = 0;
+	
+	// make a bunch of ones
+	for (int i = 0; i < wide; i++) 
+	{	
+		mask *= 2;
+		mask |=1;
+	}
+	mask = mask << rhs;
+
+	real &= ~mask;
+	real |= val << rhs;
+	
+	Serial.printf(" lhs=%d rhs=%d wide=%d mask=0x%02X val=0x%02X copy=0x%02X real=0x%02X \n",
+					lhs, rhs, wide, mask, val, copy, real);
+	return real;
+}
+
+
 /****************************************************************
 * FUNCTION NAME:SpiStart
 * FUNCTION     :spi communication start
@@ -387,7 +413,7 @@ void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
     {
     	sem_GGO0_UP = xSemaphoreCreateBinary();
     	sem_GGO0_DN = xSemaphoreCreateBinary();
-    	attachInterrupt(GDO0, GDO0_ISR, TRIG_BOTH); //FALLING
+    	attachInterrupt(GDO0, GDO0_ISR, TRIG_BOTH); 
     	bNeedInit = false;
     }
 
@@ -839,6 +865,33 @@ void ELECHOUSE_CC1101::setClb(byte b, byte s, byte e)
 byte ELECHOUSE_CC1101::getMode(void)
 {
     return trxstate;
+}
+
+/****************************************************************
+* FUNCTION NAME:Set Num Preamblebits
+* FUNCTION     :PreambleBits
+* INPUT        :none
+* OUTPUT       :none
+****************************************************************/
+void ELECHOUSE_CC1101::setPreambleBitLen(uint8_t in)
+{
+	const uint8_t mapx[] = { 2,3,4,6,8,12,16,24 };
+	
+	uint8_t index;
+	for (index = 1; index < 8; index++)
+	{
+		if (in < mapx[index]) break;
+	}
+	index -=1;
+	
+	Serial.printf("%s in=%d index=%d\n", __FUNCTION__, in, index);
+	
+	uint8_t test = SpiReadReg(CC1101_MDMCFG1);    //SpiWriteReg(CC1101_SYNC1, sh);
+
+	regMask (test, index, 6,4); // yes it wants the index number, not the value.
+    SpiWriteReg(CC1101_MDMCFG1, test);
+   
+
 }
 
 

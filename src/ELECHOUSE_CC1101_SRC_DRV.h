@@ -188,6 +188,7 @@ byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
 void setClb(byte b, byte s, byte e);
 byte getMode(void);
+void setPreambleBitLen(uint8_t cnt);
 void setSyncWord(byte sh, byte sl);
 void setAddr(byte v);
 void setWhiteData(bool v);
