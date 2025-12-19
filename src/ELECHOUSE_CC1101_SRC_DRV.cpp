@@ -1269,8 +1269,6 @@ void ELECHOUSE_CC1101::setChsp(float channelspaceF)
 ****************************************************************/
 void ELECHOUSE_CC1101::setRxBW(float rxBw)
 {
-
-#if 1
 	int16_t exp;
 	float mantissa;
 	int32_t iMant;
@@ -1306,40 +1304,6 @@ void ELECHOUSE_CC1101::setRxBW(float rxBw)
 	regRMW(CC1101_MDMCFG4, lockMantissa, 5, 4);
 
 		
-#else
-    Split_MDMCFG4();
-    int s1 = 3;
-    int s2 = 3;
-
-    for (int i = 0; i < 3; i++)
-    {
-        if (f > 101.5625)
-        {
-            f /= 2; s1--;
-        }
-        else
-        {
-            i = 3;
-        }
-    }
-
-    for (int i = 0; i < 3; i++)
-    {
-        if (f > 58.1)
-        {
-            f /= 1.25; s2--;
-        }
-        else
-        {
-            i = 3;
-        }
-    }
-
-    s1 *= 64;
-    s2 *= 16;
-    m4RxBw = s1 + s2;
-    SpiWriteReg(16, m4RxBw + m4DaRa);
-#endif
 }
 
 
@@ -1394,36 +1358,41 @@ void ELECHOUSE_CC1101::setDRate(float RDATA)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDeviation(float d)
+void ELECHOUSE_CC1101::setDeviation(float fdev)
 {
-    float f = 1.586914;
-    float v = 0.19836425;
-    int c = 0;
+	int16_t exp;
+	float mantissa;
+	int32_t iMant;
 
-    if (d > 380.859375)
-        d = 380.859375;
+	int16_t lockExp = -1;
+	int16_t lockMantissa = -1;
 
-    if (d < 1.586914)
-        d = 1.586914;
+	Serial.printf("%s: setting deviation = %5.2f khz\n", __FUNCTION__, fdev);
 
-    for (int i = 0; i < 255; i++)
-    {
-        f += v;
+	fdev *= 1000.;
+	float FIXED = fdev * (float)(1 << 17)/ (XTAL_Mhz * 1.e6 );
 
-        if (c == 7)
-        {
-            v *= 2; c = -1; i += 8;
-        }
+	for (exp = 0; exp < 8; exp++)  // exp reg is 3 bits.
+	{
+		float expTest = (float)(1 << exp);
+		float mantissa = ((FIXED - 8 * expTest)) /expTest;
+		iMant = mantissa;
+		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
 
-        if (f >= d)
-        {
-            c = i; i = 255;
-        }
+		if (iMant < 0) continue;	// negative is bad for pll
+		if (iMant > 7) continue;	// can't fit in a 3 bit register
 
-        c++;
-    }
+		if (lockExp < 0)
+		{
+			lockExp = exp;
+			lockMantissa = iMant;
+		}
+	}
+	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
+	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
+	
+	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
 
-    SpiWriteReg(21, c);
 }
 
 
