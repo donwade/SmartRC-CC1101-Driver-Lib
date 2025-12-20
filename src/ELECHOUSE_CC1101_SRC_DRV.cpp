@@ -27,7 +27,6 @@
 
 
 byte modulation = 2;
-byte frend0;
 byte chan = 0;
 int pa = 12;
 byte last_pa;
@@ -45,24 +44,15 @@ byte GDO0_M[max_modul];
 byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
-eGDIO_MODES gdio_mode = LEGACY_0;
+eGDIO_MODES gdio_mode = DONS_MODE;
 float targetFreq = 903.210;
 byte m4RxBw = 0;
 byte m4DaRa;
-byte m2DCOFF;
-byte m2MODFM;
-byte m2MANCH;
-byte m2SYNCM;
 byte m1CHSP;
 byte pc1PQT;
-byte pc1CRC_AF;
 byte pc1APP_ST;
-byte pc1ADRCHK;
-byte pc0WDATA;
-byte pc0PktForm;
-byte pc0CRC_EN;
-byte pc0LenConf;
-byte trxstate = 0;
+eMODEM_STATE trxstate = MODEM_IDLE;
+
 byte cal300_348Mhz[2] = { 24, 28 };
 byte cal378_464Mhz[2] = { 31, 38 };
 byte cal779_899Mhz[2] = { 65, 76 };
@@ -102,9 +92,12 @@ template <typename T> T regMask( T &real, T val, uint8_t lhs, uint8_t rhs)
 	
 	real &= ~mask;
 	real |= val << rhs;
-	
+
+#if 0
 	Serial.printf(" lhs=%d rhs=%d wide=%d mask=0x%02X val=0x%02X copy=0x%02X real=0x%02X \n",
 					lhs, rhs, wide, mask, val, copy, real);
+#endif
+
 	return real;
 }
 
@@ -165,29 +158,25 @@ void ELECHOUSE_CC1101::GDO_Set(void)
     delay(3000);
 }
 
+//-------------------------------------------------------------
 
-/****************************************************************
-* FUNCTION NAME: GDO_Set()
-* FUNCTION     : set GDO0 for internal transmission mode.
-* INPUT        : none
-* OUTPUT       : none
-****************************************************************/
 uint32_t GDO0_risingCtr;
 uint32_t GDO0_fallingCtr;
 uint32_t GDO0_timeout;
 uint32_t GDO0_sempass;
 
-SemaphoreHandle_t sem_GGO0_UP = NULL;
-SemaphoreHandle_t sem_GGO0_DN = NULL;
+SemaphoreHandle_t sem_GDO0_UP = NULL;
+SemaphoreHandle_t sem_GDO0_DN = NULL;
 
 uint32_t GDO2_risingCtr;
 uint32_t GDO2_fallingCtr;
 uint32_t GDO2_timeout;
 uint32_t GDO2_sempass;
 
-SemaphoreHandle_t sem_GGO2_UP = NULL;
-SemaphoreHandle_t sem_GGO2_DN = NULL;
+SemaphoreHandle_t sem_GDO2_UP = NULL;
+SemaphoreHandle_t sem_GDO2_DN = NULL;
 
+//-------------------------------------------------------------
 void IRAM_ATTR GDO0_ISR()
 {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -195,12 +184,13 @@ void IRAM_ATTR GDO0_ISR()
 	
 	pin ? GDO0_risingCtr++ : GDO0_fallingCtr++;
 	
-	xSemaphoreGiveFromISR( pin ? sem_GGO0_UP: sem_GGO0_DN, &xHigherPriorityTaskWoken );
+	xSemaphoreGiveFromISR( pin ? sem_GDO0_UP: sem_GDO0_DN, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
 }
 
+//-------------------------------------------------------------
 void IRAM_ATTR GDO2_ISR()
 {
 	BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -208,7 +198,7 @@ void IRAM_ATTR GDO2_ISR()
 	
 	pin ? GDO2_risingCtr++ : GDO2_fallingCtr++;
 	
-	xSemaphoreGiveFromISR( pin ? sem_GGO2_UP : sem_GGO2_DN, &xHigherPriorityTaskWoken );
+	xSemaphoreGiveFromISR( pin ? sem_GDO2_UP : sem_GDO2_DN, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
@@ -424,8 +414,8 @@ void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
 
     if (bNeedInit)
     {
-    	sem_GGO0_UP = xSemaphoreCreateBinary();
-    	sem_GGO0_DN = xSemaphoreCreateBinary();
+    	sem_GDO0_UP = xSemaphoreCreateBinary();
+    	sem_GDO0_DN = xSemaphoreCreateBinary();
     	attachInterrupt(GDO0, GDO0_ISR, TRIG_BOTH); 
     	bNeedInit = false;
     }
@@ -455,8 +445,8 @@ void ELECHOUSE_CC1101::setGDO2(int8_t gdPinNo)
     if (bNeedInit)
     {
     	attachInterrupt(GDO2, GDO2_ISR, TRIG_BOTH);
-    	sem_GGO2_UP = xSemaphoreCreateBinary();
-    	sem_GGO2_DN = xSemaphoreCreateBinary();
+    	sem_GDO2_UP = xSemaphoreCreateBinary();
+    	sem_GDO2_DN = xSemaphoreCreateBinary();
     	bNeedInit = false;
     }
 
@@ -508,8 +498,8 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
     else if (gdio_mode == DONS_MODE)
     {
     	//page 62
-    	Serial.printf("%s: DON GDO0=fifo thresh  GDO2=mdm clock in/out\n", __FUNCTION__);
-        SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
+    	Serial.printf("%s: DON GDO0=fifo thresh  GDO2=sync detect/ rxoflow\n", __FUNCTION__);
+        SpiWriteReg(CC1101_IOCFG2, 0x06);  // GDO2 sync detected or rx overflow
         SpiWriteReg(CC1101_IOCFG0, 0x02);  // GD00 signal on tx getting low?
 
 		// page 74
@@ -541,7 +531,8 @@ void ELECHOUSE_CC1101::setModulation(byte m)
         m = 4;
 
     modulation = m;
-    Split_MDMCFG2();
+	byte m2MODFM;
+	byte frend0;
 
     switch (m)
     {
@@ -556,8 +547,9 @@ void ELECHOUSE_CC1101::setModulation(byte m)
     case 4: m2MODFM = 0x70; frend0 = 0x10; break;   // MSK
     }
 
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
-    SpiWriteReg(CC1101_FREND0, frend0);
+    regRMW(CC1101_MDMCFG2, m2MODFM, 6, 4);
+    regRMW(CC1101_FREND0, frend0, 7, 0);
+    
     setPA(pa);
 }
 
@@ -690,62 +682,30 @@ void ELECHOUSE_CC1101::setPA(int p)
 ****************************************************************/
 void ELECHOUSE_CC1101::setMHZ(float mhz)
 {
-	//pg. 75
-	unsigned long test;
-    byte freq2 = 0;
-    byte freq1 = 0;
-    byte freq0 = 0;
+	uint32_t  temp;
 
-	Serial.printf("%s: setting freq to %f mHz\n",__FUNCTION__, mhz);
+	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
+	Serial.printf("%s: %7.3f  data=0x%X\n", __FUNCTION__, mhz,  temp);
+	SpiWriteReg(CC1101_FREQ2, (temp >>16) & 0xFF);
+	SpiWriteReg(CC1101_FREQ1, (temp >> 8) & 0xFF);
+	SpiWriteReg(CC1101_FREQ0,  temp       & 0xFF);
 	
-    targetFreq = mhz;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (mhz >= 26)
-        {
-            mhz -= 26;
-            freq2 += 1;
-        }
-        else if (mhz >= 0.1015625)
-        {
-            mhz -= 0.1015625;
-            freq1 += 1;
-        }
-        else if (mhz >= 0.00039675)
-        {
-            mhz -= 0.00039675;
-            freq0 += 1;
-        }
-        else
-        {
-            i = 1;
-        }
-    }
-
-    if (freq0 > 255)
-    {
-        freq1 += 1; freq0 -= 256;
-    }
-
-    SpiWriteReg(CC1101_FREQ2, freq2);
-    SpiWriteReg(CC1101_FREQ1, freq1);
-    SpiWriteReg(CC1101_FREQ0, freq0);
-/*
-	test = freq2 << 16 | freq1 << 8 | freq0;
+	targetFreq = mhz;
 	
-    Serial.printf("%s: freq =%f %X reg1=%X reg2=%08X reg3=%08X\n",
-    			__FUNCTION__, targetFreq, 
-    			test,
-				freq2,freq1,freq0);
-	double retest;
+#if 0	
+	uint32_t test = SpiReadReg(CC1101_FREQ2) << 16 | SpiReadReg(CC1101_FREQ1) << 8 | SpiReadReg(CC1101_FREQ0);
+	
+    Serial.printf("%s: freq =%f readSPI = %X \n",
+    			__FUNCTION__, targetFreq, test);
+
+    double retest;
 	retest = (XTAL_Mhz / (double)(1<<16)) * (double) test;
 	Serial.printf("%s retest = %f mhz \n", __FUNCTION__, (float) retest);
 
 	double err = targetFreq - retest;
 
-	Serial.printf("%s error = %f\n", __FUNCTION__, err);
-*/
+	Serial.printf("%s error = %f\n", __FUNCTION__, err * 1e6);
+#endif
 
     Calibrate(); //disabled in call, it makes things worse.
 }
@@ -874,7 +834,7 @@ void ELECHOUSE_CC1101::setClb(byte b, byte s, byte e)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-byte ELECHOUSE_CC1101::getMode(void)
+eMODEM_STATE ELECHOUSE_CC1101::getMode(void)
 {
     return trxstate;
 }
@@ -896,7 +856,7 @@ void ELECHOUSE_CC1101::setPRE(uint8_t in)
 	}
 	index -=1;
 	
-	Serial.printf("%s in=%d index=%d\n", __FUNCTION__, in, index);
+	Serial.printf("%s:  in=%d index=%d\n", __FUNCTION__, in, index);
 	
     regRMW(CC1101_MDMCFG1, index, 6,4);  // yes it wants the index number, not the value.
 }
@@ -935,14 +895,10 @@ void ELECHOUSE_CC1101::setAddr(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setPQT(byte v)
 {
-    Split_PKTCTRL1();
-    pc1PQT = 0;
+ 
+    if (v > 7) v = 7;
 
-    if (v > 7)
-        v = 7;
-
-    pc1PQT = v * 32;
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+    regRMW(CC1101_PKTCTRL1, v, 7, 5);
 }
 
 
@@ -954,13 +910,7 @@ void ELECHOUSE_CC1101::setPQT(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCRC_AF(bool v)
 {
-    Split_PKTCTRL1();
-    pc1CRC_AF = 0;
-
-    if (v == 1)
-        pc1CRC_AF = 8;
-
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+    regRMW(CC1101_PKTCTRL1, v, 3, 3);
 }
 
 
@@ -972,13 +922,7 @@ void ELECHOUSE_CC1101::setCRC_AF(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAppendStatus(bool v)
 {
-    Split_PKTCTRL1();
-    pc1APP_ST = 0;
-
-    if (v == 1)
-        pc1APP_ST = 4;
-
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+    regRMW(CC1101_PKTCTRL1, v, 2, 2);
 }
 
 
@@ -990,14 +934,9 @@ void ELECHOUSE_CC1101::setAppendStatus(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAdrChk(byte v)
 {
-    Split_PKTCTRL1();
-    pc1ADRCHK = 0;
+    if (v > 3) v = 3;
 
-    if (v > 3)
-        v = 3;
-
-    pc1ADRCHK = v;
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+    regRMW(CC1101_PKTCTRL1, v, 1, 0);
 }
 
 
@@ -1009,13 +948,7 @@ void ELECHOUSE_CC1101::setAdrChk(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setWhiteData(bool v)
 {
-    Split_PKTCTRL0();
-    pc0WDATA = 0;
-
-    if (v == 1)
-        pc0WDATA = 64;
-
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+	regRMW(CC1101_PKTCTRL0, v, 6,6);
 }
 
 
@@ -1027,14 +960,8 @@ void ELECHOUSE_CC1101::setWhiteData(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setPktFormat(byte v)
 {
-    Split_PKTCTRL0();
-    pc0PktForm = 0;
-
-    if (v > 3)
-        v = 3;
-
-    pc0PktForm = v * 16;
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+    if (v > 3) v = 3;
+	regRMW(CC1101_PKTCTRL0, v , 5, 4);
 }
 
 
@@ -1046,13 +973,7 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCrc(bool v)
 {
-    Split_PKTCTRL0();
-    pc0CRC_EN = 0;
-
-    if (v == 1)
-        pc0CRC_EN = 4;
-
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+	regRMW(CC1101_PKTCTRL0,v , 2, 2);
 }
 
 
@@ -1064,14 +985,8 @@ void ELECHOUSE_CC1101::setCrc(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setLengthConfig(byte v)
 {
-    Split_PKTCTRL0();
-    pc0LenConf = 0;
-
-    if (v > 3)
-        v = 3;
-
-    pc0LenConf = v;
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+    if (v > 3) v = 3;
+    regRMW(CC1101_PKTCTRL0, v, 1, 0);
 }
 
 
@@ -1127,7 +1042,7 @@ void ELECHOUSE_CC1101::setTxFifoThreshold(uint8_t v)
 	i = i - 1;
 	
 	Serial.printf("%s : tx fifo warn wants %d gets %d {%d}\n", __FUNCTION__, v, tx_lvl[i], i);
-	delay(1000);
+
     SpiWriteReg(CC1101_FIFOTHR, i);
     SpiWriteReg(CC1101_IOCFG0, 2);  // GD00 signal on tx low
 }
@@ -1141,13 +1056,7 @@ void ELECHOUSE_CC1101::setTxFifoThreshold(uint8_t v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setDcFilterOff(bool v)
 {
-    Split_MDMCFG2();
-    m2DCOFF = 0;
-
-    if (v == 1)
-        m2DCOFF = 128;
-
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
+    regRMW(CC1101_MDMCFG2, v, 7, 7);
 }
 
 
@@ -1159,13 +1068,7 @@ void ELECHOUSE_CC1101::setDcFilterOff(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setManchester(bool v)
 {
-    Split_MDMCFG2();
-    m2MANCH = 0;
-
-    if (v == 1)
-        m2MANCH = 8;
-
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
+    regRMW(CC1101_MDMCFG2,v, 3, 3);
 }
 
 
@@ -1177,14 +1080,9 @@ void ELECHOUSE_CC1101::setManchester(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setSyncMode(byte v)
 {
-    Split_MDMCFG2();
-    m2SYNCM = 0;
+    if (v > 7) v = 7;
 
-    if (v > 7)
-        v = 7;
-
-    m2SYNCM = v;
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
+    regRMW(CC1101_MDMCFG2, v , 2, 0);
 }
 
 
@@ -1397,111 +1295,6 @@ void ELECHOUSE_CC1101::setDeviation(float fdev)
 
 
 /****************************************************************
-* FUNCTION NAME:Split PKTCTRL0
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_PKTCTRL1(void)
-{
-    int calc = SpiReadStatus(7);
-
-    pc1PQT = 0;
-    pc1CRC_AF = 0;
-    pc1APP_ST = 0;
-    pc1ADRCHK = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 32)
-        {
-            calc -= 32; pc1PQT += 32;
-        }
-        else if (calc >= 8)
-        {
-            calc -= 8; pc1CRC_AF += 8;
-        }
-        else if (calc >= 4)
-        {
-            calc -= 4; pc1APP_ST += 4;
-        }
-        else
-        {
-            pc1ADRCHK = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Split PKTCTRL0
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_PKTCTRL0(void)
-{
-    int calc = SpiReadStatus(8);
-
-    pc0WDATA = 0;
-    pc0PktForm = 0;
-    pc0CRC_EN = 0;
-    pc0LenConf = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 64)
-        {
-            calc -= 64; pc0WDATA += 64;
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16; pc0PktForm += 16;
-        }
-        else if (calc >= 4)
-        {
-            calc -= 4; pc0CRC_EN += 4;
-        }
-        else
-        {
-            pc0LenConf = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Split MDMCFG1
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_MDMCFG1(void)
-{
-    int calc = SpiReadStatus(19);
-
-    m1CHSP = 0;
-    int s2 = 0;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 128)
-        {
-            calc -= 128; 
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16;
-        }
-        else
-        {
-            m1CHSP = calc; i = 1;
-        }
-    }
-}
-
-
-/****************************************************************
 * FUNCTION NAME:Split MDMCFG2
 * FUNCTION     :none
 * INPUT        :none
@@ -1511,28 +1304,19 @@ void ELECHOUSE_CC1101::Split_MDMCFG2(void)
 {
     int calc = SpiReadStatus(18);
 
-    m2DCOFF = 0;
-    m2MODFM = 0;
-    m2MANCH = 0;
-    m2SYNCM = 0;
-
     for (bool i = 0; i == 0;)
     {
         if (calc >= 128)
         {
-            calc -= 128; m2DCOFF += 128;
         }
         else if (calc >= 16)
         {
-            calc -= 16; m2MODFM += 16;
         }
         else if (calc >= 8)
         {
-            calc -= 8; m2MANCH += 8;
         }
         else
         {
-            m2SYNCM = calc; i = 1;
         }
     }
 }
@@ -1613,27 +1397,27 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SetTx(void)
+void ELECHOUSE_CC1101::EnterTxMode(void)
 {
 	NOTE("on");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
 /****************************************************************
-* FUNCTION NAME:SetRx
+* FUNCTION NAME:EnterRxMode
 * FUNCTION     :set CC1101 to receive state
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SetRx(void)
+void ELECHOUSE_CC1101::EnterRxMode(void)
 {
 	NOTE("on");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
-    trxstate = 2;
+    trxstate = MODEM_RX;
 }
 
 
@@ -1643,30 +1427,30 @@ void ELECHOUSE_CC1101::SetRx(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SetTx(float mhz)
+void ELECHOUSE_CC1101::EnterTxMode(float mhz)
 {
 	NOTE("hop and send");
 	
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_STX);      //start send
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
 /****************************************************************
-* FUNCTION NAME:SetRx
+* FUNCTION NAME:EnterRxMode
 * FUNCTION     :set CC1101 to receive state and change frequency
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SetRx(float mhz)
+void ELECHOUSE_CC1101::EnterRxMode(float mhz)
 {
 	NOTE("hop and RX");
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_SRX);      //start receive
-    trxstate = 2;
+    trxstate = MODEM_RX;
 }
 
 
@@ -1707,28 +1491,28 @@ byte ELECHOUSE_CC1101::getLqi(void)
 
 
 /****************************************************************
-* FUNCTION NAME:SetSres
+* FUNCTION NAME:ResetChip
 * FUNCTION     :Reset CC1101
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setSres(void)
+void ELECHOUSE_CC1101::ResetChip(void)
 {
     SpiStrobe(CC1101_SRES);
-    trxstate = 0;
+    trxstate = MODEM_IDLE;
 }
 
 
 /****************************************************************
-* FUNCTION NAME:setSidle
+* FUNCTION NAME:enterIdleMode
 * FUNCTION     :set Rx / TX Off
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setSidle(void)
+void ELECHOUSE_CC1101::enterIdleMode(void)
 {
     SpiStrobe(CC1101_SIDLE);
-    trxstate = 0;
+    trxstate = MODEM_IDLE;
 }
 
 
@@ -1740,7 +1524,7 @@ void ELECHOUSE_CC1101::setSidle(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::goSleep(void)
 {
-    trxstate = 0;
+    trxstate = MODEM_IDLE;
     SpiStrobe(0x36);    //Exit RX / TX, turn off frequency synthesizer and exit
     SpiStrobe(0x39);    //Enter power down mode when CSn goes high.
 }
@@ -1796,7 +1580,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 	uint32_t then = millis();
     SpiStrobe(CC1101_STX);                              //start send
 
-    int ret = xSemaphoreTake( sem_GGO0_UP, pdMS_TO_TICKS(SAFETY_TIMER) );
+    int ret = xSemaphoreTake( sem_GDO0_UP, pdMS_TO_TICKS(SAFETY_TIMER) );
 	ret == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
 	
 	if (ret != pdTRUE) 
@@ -1805,7 +1589,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 	}
 	else
 	{
-		// GOOD tx. last 4 bytes to go as GDO0 is set to alert on byte 4.
+		// GOOD tx. only 4 bytes left in Q as GDO0 is set to alert on byte 4.
 		// docs recommend wait until last byte is out.
 		while(true)
 		{
@@ -1818,7 +1602,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 
     SpiStrobe(CC1101_SFTX); //should be zero but anyhow ... flush TXfifo
 
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
@@ -1854,7 +1638,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size, int t)
     SpiStrobe(CC1101_STX);                              //start send
     delay(t);
     SpiStrobe(CC1101_SFTX);                             //flush TXfifo
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
@@ -1890,8 +1674,8 @@ bool ELECHOUSE_CC1101::CheckCRC(void)
 ****************************************************************/
 bool ELECHOUSE_CC1101::CheckRxFifo(int t)
 {
-    if (trxstate != 2)
-        SetRx();
+    if (trxstate != MODEM_RX)
+        EnterRxMode();
 
     if (SpiReadStatus(CC1101_RXBYTES) & BYTES_IN_RXFIFO)
     {
@@ -1913,8 +1697,8 @@ bool ELECHOUSE_CC1101::CheckRxFifo(int t)
 ****************************************************************/
 byte ELECHOUSE_CC1101::CheckReceiveFlag(void)
 {
-    if (trxstate != 2)
-        SetRx();
+    if (trxstate != MODEM_RX)
+        EnterRxMode();
 
     if (digitalRead(GDO0))                      //receive data
     {

@@ -13,6 +13,8 @@
  * cc1101 Driver for RC Switch. Mod by Little Satan. With permission to modify and publish Wilson Shen (ELECHOUSE).
  * ----------------------------------------------------------------------------------------------------------------
  */
+#include <stdint.h>
+
 #ifndef ELECHOUSE_CC1101_SRC_DRV_h
 #define ELECHOUSE_CC1101_SRC_DRV_h
 
@@ -37,6 +39,13 @@ typedef enum {
     TRIG_LOW = 4,
     TRIG_HIGH = 5 
 } eIRQ_TRIGGER;
+
+typedef enum {
+    MODEM_IDLE,
+    MODEM_TX,
+    MODEM_RX
+}eMODEM_STATE;
+
 
 //***************************************CC1101 define**************************************************//
 // CC1101 CONFIG REGSITER
@@ -164,14 +173,14 @@ void setChsp(float f);
 void setRxBW(float f);
 void setDRate(float d);
 void setDeviation(float d);
-void SetTx(void);
-void SetRx(void);
-void SetTx(float mhz);
-void SetRx(float mhz);
+void EnterTxMode(void);
+void EnterRxMode(void);
+void EnterTxMode(float mhz);
+void EnterRxMode(float mhz);
 int getRssi(void);
 byte getLqi(void);
-void setSres(void);
-void setSidle(void);
+void ResetChip(void);
+void enterIdleMode(void);
 void goSleep(void);
 void SendData(byte *txBuffer, byte size);
 void SendData(char *txchar);
@@ -188,7 +197,7 @@ void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
 void setClb(byte b, byte s, byte e);
-byte getMode(void);
+eMODEM_STATE getMode(void);
 void setSyncWord(byte sh, byte sl);
 void setAddr(byte v);
 void setWhiteData(bool v);
@@ -213,6 +222,10 @@ extern uint32_t GDO0_risingCtr;
 extern uint32_t GDO0_fallingCtr;
 extern uint32_t GDO0_timeout;
 extern uint32_t GDO0_sempass;
+extern uint32_t GDO2_risingCtr;
+extern uint32_t GDO2_fallingCtr;
+extern uint32_t GDO2_timeout;
+extern uint32_t GDO2_sempass;
 
 
 #endif
