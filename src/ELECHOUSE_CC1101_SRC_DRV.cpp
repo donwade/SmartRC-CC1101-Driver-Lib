@@ -258,6 +258,13 @@ bool ELECHOUSE_CC1101::Init(void)
 	
 }
 
+void bin (unsigned char byte) {
+    for (int i = 7; i >= 0; i--) {
+        // Use bitwise AND (&) and right shift (>>) to check each bit
+        Serial.printf("%d", (byte >> i) & 1);
+    }
+    
+}
 
 void ELECHOUSE_CC1101::DumpRegs(void)
 {
@@ -267,7 +274,9 @@ void ELECHOUSE_CC1101::DumpRegs(void)
 	for (regs = 0 ; regs < 0x30; regs++)
 	{	
 		uint8_t read = SpiReadReg(regs);
-		Serial.printf("\t0x%02X    0x%02X\n", regs, read);	
+		Serial.printf("\t0x%02X    0x%02X  ", regs, read);
+		bin(read);
+		Serial.println();
 	}
 }
 /****************************************************************
