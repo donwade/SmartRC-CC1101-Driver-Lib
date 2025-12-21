@@ -143,7 +143,8 @@ typedef enum {
 class ELECHOUSE_CC1101
 {
 private:
-void regRMW(uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
+void _regRMW(const char *name, uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
+
 void setupSPIhw(void);
 void SpiEnd(void);
 void GDO_Set(void);
@@ -155,7 +156,10 @@ void Split_PKTCTRL1(void);
 void Split_MDMCFG1(void);
 void Split_MDMCFG2(void);
 void Split_MDMCFG4(void);
+
 public:
+void DumpRegs(void);
+
 bool Init(void);
 byte SpiReadStatus(byte addr);
 void declareSpiPins(byte sck, byte miso, byte mosi, byte ss);
@@ -163,6 +167,9 @@ void declareSpiPins(byte sck, byte miso, byte mosi, byte ss);
 void setGDO0(int8_t gdPinNo);
 void setGDO2(int8_t gdPinNo);
 void setTxFifoThreshold(uint8_t v);
+
+void carrierSenseAbs(int iVal);
+void carrierSenseRel(int iVal);
 
 void setCCMode(eGDIO_MODES s);
 void setModulation(byte m);
@@ -192,7 +199,7 @@ byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
 void SpiStrobe(byte strobe);
-void SpiWriteReg(byte addr, byte value);
+void _SpiWriteReg(const char*name, byte addr, byte value);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);

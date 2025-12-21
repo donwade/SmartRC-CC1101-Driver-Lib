@@ -46,11 +46,6 @@ byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
 eGDIO_MODES gdio_mode = DONS_MODE;
 float targetFreq = 903.210;
-byte m4RxBw = 0;
-byte m4DaRa;
-byte m1CHSP;
-byte pc1PQT;
-byte pc1APP_ST;
 eMODEM_STATE trxstate = MODEM_IDLE;
 
 byte cal300_348Mhz[2] = { 24, 28 };
@@ -74,12 +69,13 @@ uint8_t PA_TABLE_868[10] { 0x03, 0x17, 0x1D, 0x26, 0x37, 0x50, 0x86, 0xCD, 0xC5,
 uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3, 0xC0, };   //900 - 928
 
 
-
-template <typename T> T regMask( T &real, T val, uint8_t lhs, uint8_t rhs)
+template <typename T> T regMask( T &final, T newVal, uint8_t lhs, uint8_t rhs)
 {
-	T copy = real;
+	T original = final;
 	T wide = (lhs - rhs) + 1;
 	T mask = 0;
+	T oldVal;
+	
 	assert (lhs >= rhs);
 	
 	// make a bunch of ones
@@ -89,16 +85,17 @@ template <typename T> T regMask( T &real, T val, uint8_t lhs, uint8_t rhs)
 		mask |=1;
 	}
 	mask = mask << rhs;
+	oldVal = (final & mask) >> rhs;
 	
-	real &= ~mask;
-	real |= val << rhs;
+	final &= ~mask;
+	final |= newVal << rhs;
 
-#if 0
-	Serial.printf(" lhs=%d rhs=%d wide=%d mask=0x%02X val=0x%02X copy=0x%02X real=0x%02X \n",
-					lhs, rhs, wide, mask, val, copy, real);
+#if 1
+	Serial.printf("\n\t%d:%d mask=0x%02X\n\toldVal=%02X newVal=%02X\n\toriginal=%02X final=%02X\n",
+					lhs, rhs, mask, oldVal, newVal, original, final);
 #endif
 
-	return real;
+	return final;
 }
 
 /****************************************************************
@@ -107,14 +104,17 @@ template <typename T> T regMask( T &real, T val, uint8_t lhs, uint8_t rhs)
 * INPUT        :reg, val, lhs, rhs
 * OUTPUT       :reg mod'd
 ****************************************************************/
-void ELECHOUSE_CC1101::regRMW(uint8_t regNum, uint8_t val, uint8_t LHS, uint8_t RHS)
+
+#define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
+#define regRMW(name, val, lhs, rhs) _regRMW(#name, name, val, lhs, rhs)
+
+void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t val, uint8_t LHS, uint8_t RHS)
 {
-	uint8_t tmp = SpiReadReg(regNum);
-	uint8_t old = tmp;
+	uint8_t old = SpiReadReg(regNum);
 	
-	uint8_t result = regMask<uint8_t> ( tmp, val, LHS, RHS);
-	SpiWriteReg(regNum,result);
-	Serial.printf("%s: reg 0x%02X old=0x%02X new=0x%02X\n", __FUNCTION__, regNum, old, result); 
+	Serial.printf("\n%s [0x%02X] ", regName, regNum); 
+	uint8_t want = regMask<uint8_t> ( old, val, LHS, RHS);
+	if(old != want) _SpiWriteReg(regName, regNum, want);
 }
 
 /****************************************************************
@@ -259,13 +259,24 @@ bool ELECHOUSE_CC1101::Init(void)
 }
 
 
+void ELECHOUSE_CC1101::DumpRegs(void)
+{
+	int8_t regs;
+	Serial.println("-----------------------------------------");
+	
+	for (regs = 0 ; regs < 0x30; regs++)
+	{	
+		uint8_t read = SpiReadReg(regs);
+		Serial.printf("\t0x%02X    0x%02X\n", regs, read);	
+	}
+}
 /****************************************************************
 * FUNCTION NAME:SpiWriteReg
 * FUNCTION     :CC1101 write data to register
 * INPUT        :addr: register address; value: register value
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
+void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
 {
     digitalWrite(SS_PIN, LOW);
 
@@ -274,6 +285,7 @@ void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 
     digitalWrite(SS_PIN, HIGH);
     mySPI->endTransaction();
+    Serial.printf("%s [%02X] -> %3d 0x%02X\n", name, addr, value, value);
 }
 
 
@@ -468,6 +480,8 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
 
     if (gdio_mode == LEGACY_1)
     {
+    	assert(0);
+/*   	
     	//page 62
     	Serial.printf("%s: GDO0=det-sync tx or rx   GDO2=mdm clock in/out\n", __FUNCTION__);
         SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
@@ -480,10 +494,13 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
         
         SpiWriteReg(CC1101_MDMCFG3, 0xF8);
         SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
+*/
     }
     else if (gdio_mode == LEGACY_0)
     {
+    	assert(0);
     	//page 62
+/*    	
     	Serial.printf("%s: GDO0=mdm data in/out GDO2=mdm data in/out \n", __FUNCTION__);
         SpiWriteReg(CC1101_IOCFG2, 0x0D);	// gd02 serial data out
         SpiWriteReg(CC1101_IOCFG0, 0x0D);   // gd00 serial data out
@@ -494,21 +511,26 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
         
         SpiWriteReg(CC1101_MDMCFG3, 0x93);
         SpiWriteReg(CC1101_MDMCFG4, 7 + m4RxBw);
-    }
+*/
+	}
     else if (gdio_mode == DONS_MODE)
     {
     	//page 62
     	Serial.printf("%s: DON GDO0=fifo thresh  GDO2=sync detect/ rxoflow\n", __FUNCTION__);
-        SpiWriteReg(CC1101_IOCFG2, 0x06);  // GDO2 sync detected or rx overflow
         SpiWriteReg(CC1101_IOCFG0, 0x02);  // GD00 signal on tx getting low?
+        
+        //SpiWriteReg(CC1101_IOCFG2, 0x06);  // GDO2 sync detected or rx overflow
+        //SpiWriteReg(CC1101_IOCFG2, 0x27);  // GDO2 32khz signal
+        //SpiWriteReg(CC1101_IOCFG2, 0x8);   // GDO2 PQI ok/bad
+        SpiWriteReg(CC1101_IOCFG2, 0x9);     // GDO2 RSSI below threshold see CCA_MODE
 
 		// page 74
 		
     	Serial.printf("%s: DON CRC=ON pktLen=inPacket rx/tx-Fifos=ON\n" , __FUNCTION__);
         SpiWriteReg(CC1101_PKTCTRL0, 0x05); 
         
-        SpiWriteReg(CC1101_MDMCFG3, 0xF8);
-        SpiWriteReg(CC1101_MDMCFG4, 11 + m4RxBw);
+        ////SpiWriteReg(CC1101_MDMCFG3, 0xF8);
+        ////SpiWriteReg(CC1101_MDMCFG4, 11 );
     }
     else 
     {
@@ -1294,62 +1316,52 @@ void ELECHOUSE_CC1101::setDeviation(float fdev)
 }
 
 
-/****************************************************************
-* FUNCTION NAME:Split MDMCFG2
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_MDMCFG2(void)
+void ELECHOUSE_CC1101::carrierSenseAbs(int iValAbs)
 {
-    int calc = SpiReadStatus(18);
+	int orig = iValAbs;
 
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 128)
-        {
-        }
-        else if (calc >= 16)
-        {
-        }
-        else if (calc >= 8)
-        {
-        }
-        else
-        {
-        }
-    }
+	assert (iValAbs < -8 || iValAbs > 7);
+
+	iValAbs &= 0xF;
+	
+	if (iValAbs == 8)
+		Serial.printf("abs carrier sense  DISABLED");
+	else
+		Serial.printf("abs carrier sense = %d db (test=0x%X)", orig, iValAbs);
+	
+	regRMW(CC1101_AGCCTRL1, iValAbs, 3, 0);
+	
 }
 
-
-/****************************************************************
-* FUNCTION NAME:Split MDMCFG4
-* FUNCTION     :none
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::Split_MDMCFG4(void)
+void ELECHOUSE_CC1101::carrierSenseRel(int iValDb)
 {
-    int calc = SpiReadStatus(16);
+	// pg 47 17.4.2 CS Relative Threshold
+	
+	uint8_t reg;
 
-    m4RxBw = 0;
-    m4DaRa = 0;
+	if (iValDb == 0)
+	{
+		reg = 0;
+	}
+	else if (iValDb <= 6)
+	{
+		reg = 1;
+	} 
+	else if (iValDb <= 10)
+	{
+		reg = 2;
+	} 
+	else if (iValDb <= 14)
+	{
+		reg = 3;
+	}
+	else
+		assert (iValDb == !iValDb);
 
-    for (bool i = 0; i == 0;)
-    {
-        if (calc >= 64)
-        {
-            calc -= 64; m4RxBw += 64;
-        }
-        else if (calc >= 16)
-        {
-            calc -= 16; m4RxBw += 16;
-        }
-        else
-        {
-            m4DaRa = calc; i = 1;
-        }
-    }
+	Serial.printf("relative carrier sense <= %d db\n", iValDb);
+	
+	regRMW(CC1101_AGCCTRL1, reg, 5, 4);
+	
 }
 
 
