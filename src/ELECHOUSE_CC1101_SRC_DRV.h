@@ -182,7 +182,7 @@ void setDRate(float d);
 void setDeviation(float d);
 void EnterTxMode(void);
 void EnterRxMode(void);
-void EnterTxMode(float mhz);
+void EnterTxModePlusFreq(float mhz);
 void EnterRxMode(float mhz);
 int getRssi(void);
 byte getLqi(void);

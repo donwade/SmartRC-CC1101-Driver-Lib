@@ -45,8 +45,8 @@ byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
 eGDIO_MODES gdio_mode = DONS_MODE;
-float targetFreq = 903.210;
 eMODEM_STATE trxstate = MODEM_IDLE;
+float gTargetFreq = 0.0;
 
 byte cal300_348Mhz[2] = { 24, 28 };
 byte cal378_464Mhz[2] = { 31, 38 };
@@ -112,7 +112,7 @@ void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t val,
 {
 	uint8_t old = SpiReadReg(regNum);
 	
-	Serial.printf("\n%s [0x%02X] ", regName, regNum); 
+	Serial.printf("\n[0x%02X] %s\t", regNum, regName ); 
 	uint8_t want = regMask<uint8_t> ( old, val, LHS, RHS);
 	if(old != want) _SpiWriteReg(regName, regNum, want);
 }
@@ -294,7 +294,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
 
     digitalWrite(SS_PIN, HIGH);
     mySPI->endTransaction();
-    Serial.printf("%s [%02X] -> %3d 0x%02X\n", name, addr, value, value);
+    Serial.printf("\n[0x%02X] %s\t%3d 0x%02X\n", addr, name, value, value);
 }
 
 
@@ -596,8 +596,9 @@ void ELECHOUSE_CC1101::setPA(int p)
     int a;
 
     pa = p;
-
-    if (targetFreq >= 300 && targetFreq <= 348)
+	assert(gTargetFreq);
+	
+    if (gTargetFreq >= 300 && gTargetFreq <= 348)
     {
         if (pa <= -30)
             a = PA_TABLE_315[0];
@@ -618,7 +619,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 1;
     }
-    else if (targetFreq >= 378 && targetFreq <= 464)
+    else if (gTargetFreq >= 378 && gTargetFreq <= 464)
     {
         if (pa <= -30)
             a = PA_TABLE_433[0];
@@ -639,7 +640,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 2;
     }
-    else if (targetFreq >= 779 && targetFreq <= 899.99)
+    else if (gTargetFreq >= 779 && gTargetFreq <= 899.99)
     {
         if (pa <= -30)
             a = PA_TABLE_868[0];
@@ -664,7 +665,7 @@ void ELECHOUSE_CC1101::setPA(int p)
 
         last_pa = 3;
     }
-    else if (targetFreq >= 900 && targetFreq <= 928)
+    else if (gTargetFreq >= 900 && gTargetFreq <= 928)
     {
         if (pa <= -30)
             a = PA_TABLE_915[0];
@@ -716,24 +717,24 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 	uint32_t  temp;
 
 	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
-	Serial.printf("%s: %7.3f  data=0x%X\n", __FUNCTION__, mhz,  temp);
+	Serial.printf("\n%s: %7.3f  data=0x%X\n", __FUNCTION__, mhz,  temp);
+	
 	SpiWriteReg(CC1101_FREQ2, (temp >>16) & 0xFF);
 	SpiWriteReg(CC1101_FREQ1, (temp >> 8) & 0xFF);
 	SpiWriteReg(CC1101_FREQ0,  temp       & 0xFF);
 	
-	targetFreq = mhz;
+	gTargetFreq = mhz;
+	delay(5000);
 	
-#if 0	
+	
+#if 1	
 	uint32_t test = SpiReadReg(CC1101_FREQ2) << 16 | SpiReadReg(CC1101_FREQ1) << 8 | SpiReadReg(CC1101_FREQ0);
 	
-    Serial.printf("%s: freq =%f readSPI = %X \n",
-    			__FUNCTION__, targetFreq, test);
-
     double retest;
 	retest = (XTAL_Mhz / (double)(1<<16)) * (double) test;
-	Serial.printf("%s retest = %f mhz \n", __FUNCTION__, (float) retest);
+	Serial.printf("%s VERIFY = %f mhz \n", __FUNCTION__, (float) retest);
 
-	double err = targetFreq - retest;
+	double err = gTargetFreq - retest;
 
 	Serial.printf("%s error = %f\n", __FUNCTION__, err * 1e6);
 #endif
@@ -751,11 +752,11 @@ void ELECHOUSE_CC1101::setMHZ(float mhz)
 void ELECHOUSE_CC1101::Calibrate(void)
 {
 #if 0
-    if (targetFreq >= 300 && targetFreq <= 348)
+    if (gTargetFreq >= 300 && gTargetFreq <= 348)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 300, 348, cal300_348Mhz[0], cal300_348Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gTargetFreq, 300, 348, cal300_348Mhz[0], cal300_348Mhz[1]));
 
-        if (targetFreq < 322.88)
+        if (gTargetFreq < 322.88)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -771,11 +772,11 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (targetFreq >= 378 && targetFreq <= 464)
+    else if (gTargetFreq >= 378 && gTargetFreq <= 464)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 378, 464, cal378_464Mhz[0], cal378_464Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gTargetFreq, 378, 464, cal378_464Mhz[0], cal378_464Mhz[1]));
 
-        if (targetFreq < 430.5)
+        if (gTargetFreq < 430.5)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -791,11 +792,11 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (targetFreq >= 779 && targetFreq <= 899.99)
+    else if (gTargetFreq >= 779 && gTargetFreq <= 899.99)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 779, 899, cal779_899Mhz[0], cal779_899Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gTargetFreq, 779, 899, cal779_899Mhz[0], cal779_899Mhz[1]));
 
-        if (targetFreq < 861)
+        if (gTargetFreq < 861)
         {
             SpiWriteReg(CC1101_TEST0, 0x0B);
         }
@@ -811,9 +812,9 @@ void ELECHOUSE_CC1101::Calibrate(void)
                 setPA(pa);
         }
     }
-    else if (targetFreq >= 900 && targetFreq <= 928)
+    else if (gTargetFreq >= 900 && gTargetFreq <= 928)
     {
-        SpiWriteReg(CC1101_FSCTRL0, map(targetFreq, 900, 928, cal900_928Mhz[0], cal900_928Mhz[1]));
+        SpiWriteReg(CC1101_FSCTRL0, map(gTargetFreq, 900, 928, cal900_928Mhz[0], cal900_928Mhz[1]));
         SpiWriteReg(CC1101_TEST0, 0x09);
         int s = ELECHOUSE_cc1101.SpiReadStatus(CC1101_FSCAL2);
 
@@ -1384,8 +1385,8 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 {
     SpiWriteReg(CC1101_FSCTRL1, 0x06);
 
+    setMHZ(903.3333);		// general freq, PA routines need a freq
     setCCMode(gdio_mode);
-    setMHZ(targetFreq);
 
     SpiWriteReg(CC1101_MDMCFG1, 0x02);
     SpiWriteReg(CC1101_MDMCFG0, 0xF8);
@@ -1420,7 +1421,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterTxMode(void)
 {
-	NOTE("on");
+	Serial.printf("************* Enter tx mode \n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
     trxstate = MODEM_TX;
@@ -1435,7 +1436,7 @@ void ELECHOUSE_CC1101::EnterTxMode(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterRxMode(void)
 {
-	NOTE("on");
+	Serial.printf("************** EnterRxMode ****\n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
     trxstate = MODEM_RX;
@@ -1448,9 +1449,9 @@ void ELECHOUSE_CC1101::EnterRxMode(void)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::EnterTxMode(float mhz)
+void ELECHOUSE_CC1101::EnterTxModePlusFreq(float mhz)
 {
-	NOTE("hop and send");
+	Serial.printf("************* Enter tx mode with freq = %f\n", mhz);
 	
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
@@ -1467,6 +1468,8 @@ void ELECHOUSE_CC1101::EnterTxMode(float mhz)
 ****************************************************************/
 void ELECHOUSE_CC1101::EnterRxMode(float mhz)
 {
+	Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
+
 	NOTE("hop and RX");
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
@@ -1615,10 +1618,10 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 		while(true)
 		{
 			count = SpiReadStatus(CC1101_TXBYTES);
+			Serial.printf("bytes left in TxQ = %d\n", count);
 			if (!count) break;
 			delay(1);
 		}
-		//Serial.printf("bytes left in Q = %d\n", count);
 	}
 
     SpiStrobe(CC1101_SFTX); //should be zero but anyhow ... flush TXfifo
