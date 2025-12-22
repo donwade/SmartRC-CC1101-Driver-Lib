@@ -146,6 +146,8 @@ void Split_MDMCFG1(void);
 void Split_MDMCFG2(void);
 void Split_MDMCFG4(void);
 public:
+void DumpRegs(void);
+
 bool Init(void);
 byte SpiReadStatus(byte addr);
 void declareSpiPins(byte sck, byte miso, byte mosi, byte ss);
