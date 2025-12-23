@@ -72,7 +72,7 @@ byte cal900_928Mhz[2] = { 77, 79 };
 
 SPIClass *mySPI = NULL;
 
-static const double XTAL=26.0;
+static const double XTAL_Mhz=26.0;
 #define SAFETY_TIMER 10000  // how long to wait for tx done.
 
 /****************************************************************/
@@ -162,16 +162,11 @@ void ELECHOUSE_CC1101::GDO_Set(void)
     pinMode(GDO0, OUTPUT);
     pinMode(GDO2, INPUT);
     Serial.printf("\n%s: GDO0 %d set to OUTPUT ... GD02 %d set to INPUT\n\n", GDO0, GDO2);
-    delay(3000);
+
 }
 
+//-------------------------------------------------------------
 
-/****************************************************************
-* FUNCTION NAME: GDO_Set()
-* FUNCTION     : set GDO0 for internal transmission mode.
-* INPUT        : none
-* OUTPUT       : none
-****************************************************************/
 uint32_t GDO0_risingCtr;
 uint32_t GDO0_fallingCtr;
 uint32_t GDO0_timeout;
@@ -714,62 +709,27 @@ void ELECHOUSE_CC1101::setPA(int p)
 ****************************************************************/
 void ELECHOUSE_CC1101::setMHZ(float mhz)
 {
-	//pg. 75
-	unsigned long test;
-    byte freq2 = 0;
-    byte freq1 = 0;
-    byte freq0 = 0;
+	uint32_t  temp;
 
-	Serial.printf("%s: setting freq to %f mHz\n",__FUNCTION__, mhz);
+	temp = (( mhz  * (float)(1 << 16))/ XTAL_Mhz);
+	Serial.printf("\n%s: %7.3f  data=0x%X\n", __FUNCTION__, mhz,  temp);
 	
-    gTargetFreq = mhz;
-
-    for (bool i = 0; i == 0;)
-    {
-        if (mhz >= 26)
-        {
-            mhz -= 26;
-            freq2 += 1;
-        }
-        else if (mhz >= 0.1015625)
-        {
-            mhz -= 0.1015625;
-            freq1 += 1;
-        }
-        else if (mhz >= 0.00039675)
-        {
-            mhz -= 0.00039675;
-            freq0 += 1;
-        }
-        else
-        {
-            i = 1;
-        }
-    }
-
-    if (freq0 > 255)
-    {
-        freq1 += 1; freq0 -= 256;
-    }
-
-    SpiWriteReg(CC1101_FREQ2, freq2);
-    SpiWriteReg(CC1101_FREQ1, freq1);
-    SpiWriteReg(CC1101_FREQ0, freq0);
-/*
-	test = freq2 << 16 | freq1 << 8 | freq0;
+	SpiWriteReg(CC1101_FREQ2, (temp >>16) & 0xFF);
+	SpiWriteReg(CC1101_FREQ1, (temp >> 8) & 0xFF);
+	SpiWriteReg(CC1101_FREQ0,  temp       & 0xFF);
 	
-    Serial.printf("%s: freq =%f %X reg1=%X reg2=%08X reg3=%08X\n",
-    			__FUNCTION__, gTargetFreq, 
-    			test,
-				freq2,freq1,freq0);
+	gTargetFreq = mhz;
+
+	uint32_t test = SpiReadReg(CC1101_FREQ2) << 16 | SpiReadReg(CC1101_FREQ1)  << 8 | SpiReadReg(CC1101_FREQ0);
+
+               
 	double retest;
-	retest = (XTAL / (double)(1<<16)) * (double) test;
-	Serial.printf("%s retest = %f mhz \n", __FUNCTION__, (float) retest);
+	retest = (XTAL_Mhz / (double)(1<<16)) * (double) test;
+	Serial.printf("%s VERIFY = %f mhz \n", __FUNCTION__, (float) retest);
 
 	double err = gTargetFreq - retest;
 
-	Serial.printf("%s error = %f\n", __FUNCTION__, err);
-*/
+	Serial.printf("%s error = %6.3f\n", __FUNCTION__, err);
 
     Calibrate(); //disabled in call, it makes things worse.
 }
