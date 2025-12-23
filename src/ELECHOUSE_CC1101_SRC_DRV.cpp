@@ -925,14 +925,10 @@ void ELECHOUSE_CC1101::setAddr(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setPQT(byte v)
 {
-    Split_PKTCTRL1();
-    pc1PQT = 0;
 
-    if (v > 7)
-        v = 7;
+    if (v > 7) v = 7;
 
-    pc1PQT = v * 32;
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+    regRMW(CC1101_PKTCTRL1, v, 7, 5);
 }
 
 
@@ -944,13 +940,9 @@ void ELECHOUSE_CC1101::setPQT(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCRC_AF(bool v)
 {
-    Split_PKTCTRL1();
-    pc1CRC_AF = 0;
+    regRMW(CC1101_PKTCTRL1, v, 3, 3);
 
-    if (v == 1)
-        pc1CRC_AF = 8;
 
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
 }
 
 
@@ -962,13 +954,9 @@ void ELECHOUSE_CC1101::setCRC_AF(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAppendStatus(bool v)
 {
-    Split_PKTCTRL1();
-    pc1APP_ST = 0;
+    regRMW(CC1101_PKTCTRL1, v, 2, 2);
 
-    if (v == 1)
-        pc1APP_ST = 4;
 
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
 }
 
 
