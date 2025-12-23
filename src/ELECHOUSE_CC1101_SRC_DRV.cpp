@@ -87,12 +87,14 @@ uint8_t PA_TABLE_915[10] { 0x03, 0x0E, 0x1E, 0x27, 0x38, 0x8E, 0x84, 0xCC, 0xC3,
 
 
 
-uint8_t regMask( uint8_t &real, uint8_t val, uint8_t lhs, uint8_t rhs)
+template <typename T> T regMask( T &final, T newVal, uint8_t lhs, uint8_t rhs)
 {
-	uint8_t copy = real;
-	uint8_t wide = (lhs - rhs) + 1;
-	uint8_t mask = 0;
+	T original = final;
+	T wide = (lhs - rhs) + 1;
+	T mask = 0;
+	T oldVal;
 	
+	assert (lhs >= rhs);
 	// make a bunch of ones
 	for (int i = 0; i < wide; i++) 
 	{	
@@ -101,12 +103,15 @@ uint8_t regMask( uint8_t &real, uint8_t val, uint8_t lhs, uint8_t rhs)
 	}
 	mask = mask << rhs;
 
-	real &= ~mask;
-	real |= val << rhs;
+	oldVal = (final & mask) >> rhs;
 	
-	Serial.printf(" lhs=%d rhs=%d wide=%d mask=0x%02X val=0x%02X copy=0x%02X real=0x%02X \n",
-					lhs, rhs, wide, mask, val, copy, real);
-	return real;
+	final &= ~mask;
+	final |= newVal << rhs;
+#if 1
+	Serial.printf("\n\t%d:%d mask=0x%02X\n\toldVal=%02X newVal=%02X\n\toriginal=%02X final=%02X\n",
+					lhs, rhs, mask, oldVal, newVal, original, final);
+#endif
+	return final;
 }
 
 
@@ -1644,7 +1649,7 @@ void ELECHOUSE_CC1101::RegConfigSettings(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetTx(void)
 {
-	NOTE("on");
+	Serial.printf("************* Enter tx mode \n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
     trxstate = 1;
@@ -1659,7 +1664,7 @@ void ELECHOUSE_CC1101::SetTx(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetRx(void)
 {
-	NOTE("on");
+	Serial.printf("************** EnterRxMode ****\n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
     trxstate = 2;
@@ -1674,7 +1679,7 @@ void ELECHOUSE_CC1101::SetRx(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetTx(float mhz)
 {
-	NOTE("hop and send");
+	Serial.printf("************* Enter tx mode with freq = %f\n", mhz);
 	
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
@@ -1691,6 +1696,7 @@ void ELECHOUSE_CC1101::SetTx(float mhz)
 ****************************************************************/
 void ELECHOUSE_CC1101::SetRx(float mhz)
 {
+	Serial.printf("************* EnterRxMode + FREQ = %f ****\n", mhz);
 	NOTE("hop and RX");
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
@@ -1839,6 +1845,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 		while(true)
 		{
 			count = SpiReadStatus(CC1101_TXBYTES);
+			Serial.printf("bytes left in TxQ = %d\n", count);
 			if (!count) break;
 			delay(1);
 		}
