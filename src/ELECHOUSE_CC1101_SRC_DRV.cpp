@@ -114,6 +114,15 @@ template <typename T> T regMask( T &final, T newVal, uint8_t lhs, uint8_t rhs)
 	return final;
 }
 
+#define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
+#define regRMW(name, val, lhs, rhs) _regRMW(#name, name, val, lhs, rhs)
+void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t val, uint8_t LHS, uint8_t RHS)
+{
+	uint8_t old = SpiReadReg(regNum);
+	Serial.printf("\n[0x%02X] %s\t", regNum, regName ); 
+	uint8_t want = regMask<uint8_t> ( old, val, LHS, RHS);
+	if(old != want) _SpiWriteReg(regName, regNum, want);
+}
 
 /****************************************************************
 * FUNCTION NAME:SpiStart
@@ -286,7 +295,7 @@ void ELECHOUSE_CC1101::DumpRegs(void)
 * INPUT        :addr: register address; value: register value
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
+void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
 {
     digitalWrite(SS_PIN, LOW);
 
@@ -295,6 +304,7 @@ void ELECHOUSE_CC1101::SpiWriteReg(byte addr, byte value)
 
     digitalWrite(SS_PIN, HIGH);
     mySPI->endTransaction();
+    Serial.printf("\n[0x%02X] %s\t%3d 0x%02X\n", addr, name, value, value);
 }
 
 
@@ -432,7 +442,6 @@ void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
     
     pinMode(GDO0, INPUT);
     Serial.printf("\n%s: GDO0 %d set to INPUT\n\n", __FUNCTION__, GDO0);
-    delay(3000);
 
     if (bNeedInit)
     {
@@ -491,6 +500,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
 
     if (gdio_mode == LEGACY_1)
     {
+    	assert(0);
     	//page 62
     	Serial.printf("%s: GDO0=det-sync tx or rx   GDO2=mdm clock in/out\n", __FUNCTION__);
         SpiWriteReg(CC1101_IOCFG2, 0x0B);  // GDO2 serial data clock
@@ -506,6 +516,7 @@ void ELECHOUSE_CC1101::setCCMode(eGDIO_MODES select)
     }
     else if (gdio_mode == LEGACY_0)
     {
+    	//assert(0);
     	//page 62
     	Serial.printf("%s: GDO0=mdm data in/out GDO2=mdm data in/out \n", __FUNCTION__);
         SpiWriteReg(CC1101_IOCFG2, 0x0D);	// gd02 serial data out
@@ -1845,7 +1856,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 		while(true)
 		{
 			count = SpiReadStatus(CC1101_TXBYTES);
-			Serial.printf("bytes left in TxQ = %d\n", count);
+			//Serial.printf("bytes left in TxQ = %d\n", count);
 			if (!count) break;
 			delay(1);
 		}

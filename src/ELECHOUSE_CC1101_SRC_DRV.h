@@ -37,6 +37,11 @@ typedef enum {
     TRIG_LOW = 4,
     TRIG_HIGH = 5 
 } eIRQ_TRIGGER;
+typedef enum {
+    MODEM_IDLE,
+    MODEM_TX,
+    MODEM_RX
+}eMODEM_STATE;
 
 //***************************************CC1101 define**************************************************//
 // CC1101 CONFIG REGSITER
@@ -134,6 +139,7 @@ typedef enum {
 class ELECHOUSE_CC1101
 {
 private:
+void _regRMW(const char *name, uint8_t register, uint8_t val, uint8_t LHS, uint8_t RHS);
 void setupSPIhw(void);
 void SpiEnd(void);
 void GDO_Set(void);
@@ -184,7 +190,7 @@ byte CheckReceiveFlag(void);
 byte ReceiveData(byte *rxBuffer);
 bool CheckCRC(void);
 void SpiStrobe(byte strobe);
-void SpiWriteReg(byte addr, byte value);
+void _SpiWriteReg(const char*name, byte addr, byte value);
 void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
