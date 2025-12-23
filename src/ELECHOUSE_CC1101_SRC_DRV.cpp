@@ -46,6 +46,7 @@ byte GDO2_M[max_modul];
 byte gdo_set = 0;
 bool bSpiPinsDeclared = 0;
 eGDIO_MODES gdio_mode = LEGACY_0;
+eMODEM_STATE trxstate = MODEM_IDLE;
 float gTargetFreq = 903.210;
 byte m4RxBw = 0;
 byte m4DaRa;
@@ -64,7 +65,6 @@ byte pc0WDATA;
 byte pc0PktForm;
 byte pc0CRC_EN;
 byte pc0LenConf;
-byte trxstate = 0;
 byte cal300_348Mhz[2] = { 24, 28 };
 byte cal378_464Mhz[2] = { 31, 38 };
 byte cal779_899Mhz[2] = { 65, 76 };
@@ -177,16 +177,16 @@ uint32_t GDO0_fallingCtr;
 uint32_t GDO0_timeout;
 uint32_t GDO0_sempass;
 
-SemaphoreHandle_t sem_GGO0_UP = NULL;
-SemaphoreHandle_t sem_GGO0_DN = NULL;
+SemaphoreHandle_t sem_GDO0_UP = NULL;
+SemaphoreHandle_t sem_GDO0_DN = NULL;
 
 uint32_t GDO2_risingCtr;
 uint32_t GDO2_fallingCtr;
 uint32_t GDO2_timeout;
 uint32_t GDO2_sempass;
 
-SemaphoreHandle_t sem_GGO2_UP = NULL;
-SemaphoreHandle_t sem_GGO2_DN = NULL;
+SemaphoreHandle_t sem_GDO2_UP = NULL;
+SemaphoreHandle_t sem_GDO2_DN = NULL;
 
 void IRAM_ATTR GDO0_ISR()
 {
@@ -195,7 +195,7 @@ void IRAM_ATTR GDO0_ISR()
 	
 	pin ? GDO0_risingCtr++ : GDO0_fallingCtr++;
 	
-	xSemaphoreGiveFromISR( pin ? sem_GGO0_UP: sem_GGO0_DN, &xHigherPriorityTaskWoken );
+	xSemaphoreGiveFromISR( pin ? sem_GDO0_UP: sem_GDO0_DN, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
@@ -208,7 +208,7 @@ void IRAM_ATTR GDO2_ISR()
 	
 	pin ? GDO2_risingCtr++ : GDO2_fallingCtr++;
 	
-	xSemaphoreGiveFromISR( pin ? sem_GGO2_UP : sem_GGO2_DN, &xHigherPriorityTaskWoken );
+	xSemaphoreGiveFromISR( pin ? sem_GDO2_UP : sem_GDO2_DN, &xHigherPriorityTaskWoken );
 
 	// wake up task that need it.
 	portYIELD_FROM_ISR( xHigherPriorityTaskWoken );
@@ -445,8 +445,8 @@ void ELECHOUSE_CC1101::setGDO0(int8_t gdPinNo)
 
     if (bNeedInit)
     {
-    	sem_GGO0_UP = xSemaphoreCreateBinary();
-    	sem_GGO0_DN = xSemaphoreCreateBinary();
+    	sem_GDO0_UP = xSemaphoreCreateBinary();
+    	sem_GDO0_DN = xSemaphoreCreateBinary();
     	attachInterrupt(GDO0, GDO0_ISR, TRIG_BOTH); 
     	bNeedInit = false;
     }
@@ -477,8 +477,8 @@ void ELECHOUSE_CC1101::setGDO2(int8_t gdPinNo)
     if (bNeedInit)
     {
     	attachInterrupt(GDO2, GDO2_ISR, TRIG_BOTH);
-    	sem_GGO2_UP = xSemaphoreCreateBinary();
-    	sem_GGO2_DN = xSemaphoreCreateBinary();
+    	sem_GDO2_UP = xSemaphoreCreateBinary();
+    	sem_GDO2_DN = xSemaphoreCreateBinary();
     	bNeedInit = false;
     }
 
@@ -898,11 +898,12 @@ void ELECHOUSE_CC1101::setClb(byte b, byte s, byte e)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-byte ELECHOUSE_CC1101::getMode(void)
+eMODEM_STATE ELECHOUSE_CC1101::getMode(void)
 {
     return trxstate;
 }
 
+#if 0
 /****************************************************************
 * FUNCTION NAME:Set Num Preamblebits
 * FUNCTION     :PreambleBits
@@ -929,7 +930,7 @@ void ELECHOUSE_CC1101::setPreambleBitLen(uint8_t in)
    
 
 }
-
+#endif
 
 /****************************************************************
 * FUNCTION NAME:Set Sync_Word
@@ -1663,7 +1664,7 @@ void ELECHOUSE_CC1101::SetTx(void)
 	Serial.printf("************* Enter tx mode \n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_STX);      //start send
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
@@ -1678,7 +1679,7 @@ void ELECHOUSE_CC1101::SetRx(void)
 	Serial.printf("************** EnterRxMode ****\n");
     SpiStrobe(CC1101_SIDLE);
     SpiStrobe(CC1101_SRX);      //start receive
-    trxstate = 2;
+    trxstate = MODEM_RX;
 }
 
 
@@ -1695,7 +1696,7 @@ void ELECHOUSE_CC1101::SetTx(float mhz)
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_STX);      //start send
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
@@ -1712,7 +1713,7 @@ void ELECHOUSE_CC1101::SetRx(float mhz)
     SpiStrobe(CC1101_SIDLE);
     setMHZ(mhz);
     SpiStrobe(CC1101_SRX);      //start receive
-    trxstate = 2;
+    trxstate = MODEM_RX;
 }
 
 
@@ -1761,7 +1762,7 @@ byte ELECHOUSE_CC1101::getLqi(void)
 void ELECHOUSE_CC1101::setSres(void)
 {
     SpiStrobe(CC1101_SRES);
-    trxstate = 0;
+    trxstate = MODEM_IDLE;
 }
 
 
@@ -1774,7 +1775,7 @@ void ELECHOUSE_CC1101::setSres(void)
 void ELECHOUSE_CC1101::setSidle(void)
 {
     SpiStrobe(CC1101_SIDLE);
-    trxstate = 0;
+    trxstate = MODEM_IDLE;
 }
 
 
@@ -1786,7 +1787,7 @@ void ELECHOUSE_CC1101::setSidle(void)
 ****************************************************************/
 void ELECHOUSE_CC1101::goSleep(void)
 {
-    trxstate = 0;
+    trxstate = MODEM_IDLE;
     SpiStrobe(0x36);    //Exit RX / TX, turn off frequency synthesizer and exit
     SpiStrobe(0x39);    //Enter power down mode when CSn goes high.
 }
@@ -1842,7 +1843,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 	uint32_t then = millis();
     SpiStrobe(CC1101_STX);                              //start send
 
-    int ret = xSemaphoreTake( sem_GGO0_UP, pdMS_TO_TICKS(SAFETY_TIMER) );
+    int ret = xSemaphoreTake( sem_GDO0_UP, pdMS_TO_TICKS(SAFETY_TIMER) );
 	ret == pdTRUE ? GDO0_sempass++ : GDO0_timeout++;
 	
 	if (ret != pdTRUE) 
@@ -1865,7 +1866,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size)
 
     SpiStrobe(CC1101_SFTX); //should be zero but anyhow ... flush TXfifo
 
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
@@ -1901,7 +1902,7 @@ void ELECHOUSE_CC1101::SendData(byte *txBuffer, byte size, int t)
     SpiStrobe(CC1101_STX);                              //start send
     delay(t);
     SpiStrobe(CC1101_SFTX);                             //flush TXfifo
-    trxstate = 1;
+    trxstate = MODEM_TX;
 }
 
 
@@ -1937,7 +1938,7 @@ bool ELECHOUSE_CC1101::CheckCRC(void)
 ****************************************************************/
 bool ELECHOUSE_CC1101::CheckRxFifo(int t)
 {
-    if (trxstate != 2)
+    if (trxstate != MODEM_RX)
         SetRx();
 
     if (SpiReadStatus(CC1101_RXBYTES) & BYTES_IN_RXFIFO)
@@ -1960,7 +1961,7 @@ bool ELECHOUSE_CC1101::CheckRxFifo(int t)
 ****************************************************************/
 byte ELECHOUSE_CC1101::CheckReceiveFlag(void)
 {
-    if (trxstate != 2)
+    if (trxstate != MODEM_RX)
         SetRx();
 
     if (digitalRead(GDO0))                      //receive data

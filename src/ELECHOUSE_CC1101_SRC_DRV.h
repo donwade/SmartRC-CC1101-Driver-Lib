@@ -13,6 +13,7 @@
  * cc1101 Driver for RC Switch. Mod by Little Satan. With permission to modify and publish Wilson Shen (ELECHOUSE).
  * ----------------------------------------------------------------------------------------------------------------
  */
+#include <stdint.h>
 #ifndef ELECHOUSE_CC1101_SRC_DRV_h
 #define ELECHOUSE_CC1101_SRC_DRV_h
 
@@ -195,8 +196,7 @@ void SpiWriteBurstReg(byte addr, byte *buffer, byte num);
 byte SpiReadReg(byte addr);
 void SpiReadBurstReg(byte addr, byte *buffer, byte num);
 void setClb(byte b, byte s, byte e);
-byte getMode(void);
-void setPreambleBitLen(uint8_t cnt);
+eMODEM_STATE getMode(void);
 void setSyncWord(byte sh, byte sl);
 void setAddr(byte v);
 void setWhiteData(bool v);
