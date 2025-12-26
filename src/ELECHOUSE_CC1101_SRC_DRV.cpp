@@ -116,13 +116,18 @@ template <typename T> T regMask( T &final, T newVal, uint8_t lhs, uint8_t rhs)
 
 #define SpiWriteReg(name, value) _SpiWriteReg(#name, name, value)
 #define regRMW(name, val, lhs, rhs) _regRMW(#name, name, val, lhs, rhs)
-void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t val, uint8_t LHS, uint8_t RHS)
+
+void ELECHOUSE_CC1101::_regRMW(const char *regName, uint8_t regNum, uint8_t bits, uint8_t LHS, uint8_t RHS)
 {
-	uint8_t old = SpiReadReg(regNum);
+	uint8_t orig = SpiReadReg(regNum);
+	uint8_t temp = orig;
 	Serial.printf("\n[0x%02X] %s\t", regNum, regName ); 
-	uint8_t want = regMask<uint8_t> ( old, val, LHS, RHS);
-	if(old != want) _SpiWriteReg(regName, regNum, want);
-}
+	uint8_t want = regMask<uint8_t> ( temp, bits, LHS, RHS);
+	
+	Serial.printf("orig = 0x%02X  want = 0x%02X\n", orig, want);
+	if(orig != want)
+		_SpiWriteReg(regName, regNum, want);
+}	
 
 /****************************************************************
 * FUNCTION NAME:SpiStart
@@ -299,7 +304,7 @@ void ELECHOUSE_CC1101::_SpiWriteReg(const char*name , byte addr, byte value)
 
     digitalWrite(SS_PIN, HIGH);
     mySPI->endTransaction();
-    Serial.printf("\n[0x%02X] %s\t%3d 0x%02X\n", addr, name, value, value);
+    Serial.printf("\n%s [0x%02X] %s\t%3d 0x%02X\n", __FUNCTION__, addr, name, value, value);
 }
 
 
@@ -863,14 +868,13 @@ eMODEM_STATE ELECHOUSE_CC1101::getMode(void)
     return trxstate;
 }
 
-#if 0
 /****************************************************************
 * FUNCTION NAME:Set Num Preamblebits
 * FUNCTION     :PreambleBits
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setPreambleBitLen(uint8_t in)
+void ELECHOUSE_CC1101::setPRE(uint8_t in)
 {
 	const uint8_t mapx[] = { 2,3,4,6,8,12,16,24 };
 	
@@ -881,16 +885,11 @@ void ELECHOUSE_CC1101::setPreambleBitLen(uint8_t in)
 	}
 	index -=1;
 	
-	Serial.printf("%s in=%d index=%d\n", __FUNCTION__, in, index);
+	Serial.printf("%s:  in=%d index=%d\n", __FUNCTION__, in, index);
 	
-	uint8_t test = SpiReadReg(CC1101_MDMCFG1);    //SpiWriteReg(CC1101_SYNC1, sh);
-
-	regMask (test, index, 6,4); // yes it wants the index number, not the value.
-    SpiWriteReg(CC1101_MDMCFG1, test);
-   
+    regRMW(CC1101_MDMCFG1, index, 6,4);  // yes it wants the index number, not the value.
 
 }
-#endif
 
 /****************************************************************
 * FUNCTION NAME:Set Sync_Word
@@ -968,14 +967,10 @@ void ELECHOUSE_CC1101::setAppendStatus(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setAdrChk(byte v)
 {
-    Split_PKTCTRL1();
-    pc1ADRCHK = 0;
 
-    if (v > 3)
-        v = 3;
+    if (v > 3) v = 3;
 
-    pc1ADRCHK = v;
-    SpiWriteReg(CC1101_PKTCTRL1, pc1PQT + pc1CRC_AF + pc1APP_ST + pc1ADRCHK);
+    regRMW(CC1101_PKTCTRL1, v, 1, 0);
 }
 
 
@@ -987,13 +982,7 @@ void ELECHOUSE_CC1101::setAdrChk(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setWhiteData(bool v)
 {
-    Split_PKTCTRL0();
-    pc0WDATA = 0;
-
-    if (v == 1)
-        pc0WDATA = 64;
-
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+	regRMW(CC1101_PKTCTRL0, v, 6,6);
 }
 
 
@@ -1005,14 +994,8 @@ void ELECHOUSE_CC1101::setWhiteData(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setPktFormat(byte v)
 {
-    Split_PKTCTRL0();
-    pc0PktForm = 0;
-
-    if (v > 3)
-        v = 3;
-
-    pc0PktForm = v * 16;
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+    if (v > 3) v = 3;
+	regRMW(CC1101_PKTCTRL0, v , 5, 4);
 }
 
 
@@ -1024,13 +1007,7 @@ void ELECHOUSE_CC1101::setPktFormat(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setCrc(bool v)
 {
-    Split_PKTCTRL0();
-    pc0CRC_EN = 0;
-
-    if (v == 1)
-        pc0CRC_EN = 4;
-
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+	regRMW(CC1101_PKTCTRL0,v , 2, 2);
 }
 
 
@@ -1042,14 +1019,8 @@ void ELECHOUSE_CC1101::setCrc(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setLengthConfig(byte v)
 {
-    Split_PKTCTRL0();
-    pc0LenConf = 0;
-
-    if (v > 3)
-        v = 3;
-
-    pc0LenConf = v;
-    SpiWriteReg(CC1101_PKTCTRL0, pc0WDATA + pc0PktForm + pc0CRC_EN + pc0LenConf);
+    if (v > 3) v = 3;
+    regRMW(CC1101_PKTCTRL0, v, 1, 0);
 }
 
 
@@ -1119,13 +1090,7 @@ void ELECHOUSE_CC1101::setTxFifoThreshold(uint8_t v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setDcFilterOff(bool v)
 {
-    Split_MDMCFG2();
-    m2DCOFF = 0;
-
-    if (v == 1)
-        m2DCOFF = 128;
-
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
+    regRMW(CC1101_MDMCFG2, v, 7, 7);
 }
 
 
@@ -1137,13 +1102,7 @@ void ELECHOUSE_CC1101::setDcFilterOff(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setManchester(bool v)
 {
-    Split_MDMCFG2();
-    m2MANCH = 0;
-
-    if (v == 1)
-        m2MANCH = 8;
-
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
+    regRMW(CC1101_MDMCFG2,v, 3, 3);
 }
 
 
@@ -1155,14 +1114,9 @@ void ELECHOUSE_CC1101::setManchester(bool v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setSyncMode(byte v)
 {
-    Split_MDMCFG2();
-    m2SYNCM = 0;
+    if (v > 7) v = 7;
 
-    if (v > 7)
-        v = 7;
-
-    m2SYNCM = v;
-    SpiWriteReg(CC1101_MDMCFG2, m2DCOFF + m2MODFM + m2MANCH + m2SYNCM);
+    regRMW(CC1101_MDMCFG2, v , 2, 0);
 }
 
 
@@ -1174,32 +1128,9 @@ void ELECHOUSE_CC1101::setSyncMode(byte v)
 ****************************************************************/
 void ELECHOUSE_CC1101::setFEC(bool v)
 {
-    Split_MDMCFG1();
-    m1FEC = 0;
-
-    if (v == 1)
-        m1FEC = 128;
-
-    SpiWriteReg(CC1101_MDMCFG1, m1FEC + m1PRE + m1CHSP);
-}
-
-
-/****************************************************************
-* FUNCTION NAME:Set PRE
-* FUNCTION     :Sets the minimum number of preamble bytes to be transmitted.
-* INPUT        :none
-* OUTPUT       :none
-****************************************************************/
-void ELECHOUSE_CC1101::setPRE(byte v)
-{
-    Split_MDMCFG1();
-    m1PRE = 0;
-
-    if (v > 7)
-        v = 7;
-
-    m1PRE = v * 16;
-    SpiWriteReg(CC1101_MDMCFG1, m1FEC + m1PRE + m1CHSP);
+	Serial.printf("%s: %s\n", __FUNCTION__, v ? "ON":"OFF");
+	
+	regRMW(CC1101_MDMCFG1, v,7,7);
 }
 
 
@@ -1222,26 +1153,63 @@ void ELECHOUSE_CC1101::setChannel(byte ch)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setChsp(float f)
+void ELECHOUSE_CC1101::setChsp(float channelspaceF)
 {
+#if 1
+	//pg 57
+	
+	int16_t exp;
+	float mantissa;
+	int32_t iTest;
+
+	int16_t lockExp = -1;
+	int16_t lockMantissa = -1;
+	
+	Serial.printf("%s: setting hop size = %5.2f khz\n", __FUNCTION__, channelspaceF);
+	
+	channelspaceF *= 1000.;
+	float FIXED = (channelspaceF * (float)(1<<18)) / (XTAL_Mhz * 1.e6 );
+	
+	for (exp = 3; exp > -1; exp--)
+	{
+		float expTest = (float)(1 << exp);
+		float mantissa = ((FIXED - 256.0 * expTest)) /expTest;
+		iTest = mantissa;
+		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
+
+		if (iTest < 0) continue;	// negative is bad for pll
+		if (iTest > 255) continue;	// can't fit in a 8bit register
+
+		if (lockExp < 0)
+		{
+			lockExp = exp;
+			lockMantissa = iTest;
+		}
+	}
+	
+	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
+	
+    regRMW(CC1101_MDMCFG1, lockExp, 1, 0);
+    regRMW(CC1101_MDMCFG0, lockMantissa, 7, 0);
+#else
     Split_MDMCFG1();
     byte MDMCFG0 = 0;
     m1CHSP = 0;
 
-    if (f > 405.456543)
-        f = 405.456543;
+    if (channelspaceF > 405.456543)
+        channelspaceF = 405.456543;
 
-    if (f < 25.390625)
-        f = 25.390625;
+    if (channelspaceF < 25.390625)
+        channelspaceF = 25.390625;
 
     for (int i = 0; i < 5; i++)
     {
-        if (f <= 50.682068)
+        if (channelspaceF <= 50.682068)
         {
-            f -= 25.390625;
-            f /= 0.0991825;
-            MDMCFG0 = f;
-            float s1 = (f - MDMCFG0) * 10;
+            channelspaceF -= 25.390625;
+            channelspaceF /= 0.0991825;
+            MDMCFG0 = channelspaceF;
+            float s1 = (channelspaceF - MDMCFG0) * 10;
 
             if (s1 >= 5)
                 MDMCFG0++;
@@ -1251,12 +1219,13 @@ void ELECHOUSE_CC1101::setChsp(float f)
         else
         {
             m1CHSP++;
-            f /= 2;
+            channelspaceF /= 2;
         }
     }
 
     SpiWriteReg(19, m1CHSP + m1FEC + m1PRE);
     SpiWriteReg(20, MDMCFG0);
+#endif
 }
 
 
@@ -1266,17 +1235,53 @@ void ELECHOUSE_CC1101::setChsp(float f)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setRxBW(float f)
+void ELECHOUSE_CC1101::setRxBW(float rxBw)
 {
+#if 1
+	int16_t exp;
+	float mantissa;
+	int32_t iMant;
+
+	int16_t lockExp = -1;
+	int16_t lockMantissa = -1;
+
+	Serial.printf("%s: setting rx bw = %5.2f khz\n", __FUNCTION__, rxBw);
+
+	rxBw *= 1000.;
+	float FIXED = (XTAL_Mhz * 1.e6) / (rxBw * 8.);
+
+	for (exp = 0; exp < 4; exp++)
+	{
+		float expTest = (float)(1 << exp);
+		float mantissa = ((FIXED - 4 * expTest)) /expTest;
+		iMant = mantissa;
+		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
+
+		if (iMant < 0) continue;	// negative is bad for pll
+		if (iMant > 3) continue;	// can't fit in a 2bit register
+
+		if (lockExp < 0)
+		{
+			lockExp = exp;
+			lockMantissa = iMant;
+		}
+	}
+
+	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
+
+	regRMW(CC1101_MDMCFG4, lockExp, 7, 6);
+	regRMW(CC1101_MDMCFG4, lockMantissa, 5, 4);
+
+#else
     Split_MDMCFG4();
     int s1 = 3;
     int s2 = 3;
 
     for (int i = 0; i < 3; i++)
     {
-        if (f > 101.5625)
+        if (rxBw > 101.5625)
         {
-            f /= 2; s1--;
+            rxBw /= 2; s1--;
         }
         else
         {
@@ -1286,9 +1291,9 @@ void ELECHOUSE_CC1101::setRxBW(float f)
 
     for (int i = 0; i < 3; i++)
     {
-        if (f > 58.1)
+        if (rxBw > 58.1)
         {
-            f /= 1.25; s2--;
+            rxBw /= 1.25; s2--;
         }
         else
         {
@@ -1300,6 +1305,7 @@ void ELECHOUSE_CC1101::setRxBW(float f)
     s2 *= 16;
     m4RxBw = s1 + s2;
     SpiWriteReg(16, m4RxBw + m4DaRa);
+#endif
 }
 
 
@@ -1309,10 +1315,49 @@ void ELECHOUSE_CC1101::setRxBW(float f)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDRate(float d)
+void ELECHOUSE_CC1101::setDRate(float RDATA)
 {
+	Serial.printf("%s: %f\n", __FUNCTION__, RDATA);
+#if 1
+	int16_t exp;
+	double mantissa;
+	int32_t iTest;
+
+	int16_t lockExp = -1;
+	int16_t lockMantissa = -1;
+	
+	Serial.printf("%s: setting data rate = %5.2f khz\n", __FUNCTION__, RDATA);
+	
+	RDATA *= 1000.;
+	double FIXED = RDATA * (double)(1 << 28)/ (double)(XTAL_Mhz * 1.e6 );
+	
+	for (exp = 16; exp > -1; exp--)  // exp reg is 4 bits.
+	{
+		double expTest = (float)(1 << exp);
+		double mantissa = ((FIXED - 256.0 * expTest)) /expTest;
+		iTest = mantissa;
+		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
+
+		if (iTest < 0) continue;	// negative is bad for pll
+		if (iTest > 255) continue;	// can't fit in a 8bit register
+
+		if (lockExp < 0)
+		{
+			lockExp = exp;
+			lockMantissa = iTest;
+		}
+		
+		// chip lockup if lt 54. Pin it!
+		if (!lockExp && lockMantissa < 54) lockMantissa = 54;
+	}
+	
+	Serial.printf("\t\t\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
+	
+    regRMW(CC1101_MDMCFG4, lockExp, 3, 0);
+    regRMW(CC1101_MDMCFG3, lockMantissa, 7, 0);
+#else
     Split_MDMCFG4();
-    float c = d;
+    float c = RDATA;
     byte MDMCFG3 = 0;
 
     if (c > 1621.83)
@@ -1344,8 +1389,17 @@ void ELECHOUSE_CC1101::setDRate(float d)
         }
     }
 
+	Serial.printf("\t\treg16 = 0x%X\n", m4DaRa);
+	Serial.printf("\t\treg16x = 0x%X\n", m4RxBw + m4DaRa);
+	
+	Serial.printf("\t\treg17 = 0x%X\n", MDMCFG3);
+	
     SpiWriteReg(16, m4RxBw + m4DaRa);
     SpiWriteReg(17, MDMCFG3);
+#endif
+	Serial.printf("VERIFY 0x10 = 0x%X why?\n", SpiReadReg(0x10));
+	Serial.printf("VERIFY 0x11 = 0x%X why?\n", SpiReadReg(0x11));
+	
 }
 
 
@@ -1355,17 +1409,52 @@ void ELECHOUSE_CC1101::setDRate(float d)
 * INPUT        :none
 * OUTPUT       :none
 ****************************************************************/
-void ELECHOUSE_CC1101::setDeviation(float d)
+void ELECHOUSE_CC1101::setDeviation(float fdev)
 {
+#if 0
+	int16_t exp;
+	float mantissa;
+	int32_t iMant;
+
+	int16_t lockExp = -1;
+	int16_t lockMantissa = -1;
+
+	Serial.printf("%s: setting deviation = %5.2f khz\n", __FUNCTION__, fdev);
+
+	fdev *= 1000.;
+	float FIXED = fdev * (float)(1 << 17)/ (XTAL_Mhz * 1.e6 );
+
+	for (exp = 0; exp < 8; exp++)  // exp reg is 3 bits.
+	{
+		float expTest = (float)(1 << exp);
+		float mantissa = ((FIXED - 8 * expTest)) /expTest;
+		iMant = mantissa;
+		Serial.printf("\t\texp=%d  mant=%d\n", exp, (int)mantissa);
+
+		if (iMant < 0) continue;	// negative is bad for pll
+		if (iMant > 7) continue;	// can't fit in a 3 bit register
+
+		if (lockExp < 0)
+		{
+			lockExp = exp;
+			lockMantissa = iMant;
+		}
+	}
+	regRMW(CC1101_DEVIATN, lockMantissa, 2, 0);
+	regRMW(CC1101_DEVIATN, lockExp, 6, 4);
+	
+	Serial.printf("\tlock Mant=%d Exp=%d\n", lockMantissa, lockExp);
+
+#else
     float f = 1.586914;
     float v = 0.19836425;
     int c = 0;
 
-    if (d > 380.859375)
-        d = 380.859375;
+    if (fdev > 380.859375)
+        fdev = 380.859375;
 
-    if (d < 1.586914)
-        d = 1.586914;
+    if (fdev < 1.586914)
+        fdev = 1.586914;
 
     for (int i = 0; i < 255; i++)
     {
@@ -1376,7 +1465,7 @@ void ELECHOUSE_CC1101::setDeviation(float d)
             v *= 2; c = -1; i += 8;
         }
 
-        if (f >= d)
+        if (f >= fdev)
         {
             c = i; i = 255;
         }
@@ -1385,6 +1474,7 @@ void ELECHOUSE_CC1101::setDeviation(float d)
     }
 
     SpiWriteReg(21, c);
+#endif
 }
 
 
